@@ -110,13 +110,15 @@ TRAIN_GPUS=0,1 ./scripts/remote_eval/train.sh 2>&1 | tee train-all.log
 This command performs the complete workflow without manual checkpoint editing:
 
 1. Installs the OpenPI RLDS extras and the small VPP data-reader dependency into their existing isolated environments.
-2. Downloads the public Bridge dataset and selects demonstrations matching the four default evaluation task families.
+2. Downloads the public Bridge dataset and selects destination-directed demonstrations related to the four default evaluation task families. It excludes inverse instructions such as “take carrot off plate” and records missing public-data task families in the manifest instead of silently claiming coverage.
 3. Creates one deterministic 90/10 train/validation split with canonical `Δxyz + Δaxis-angle + gripper` labels.
 4. Computes π0.5 normalization statistics from the training split and trains a JAX LoRA adaptation from `pi05_base`.
 5. Downloads VPP's public frozen SVD/CLIP backbones and trains its 7-D action policy with two-process bf16 data parallelism.
 6. Records common validation loss, uses each model's predeclared final step for the primary comparison, writes both artifact paths into `scripts/remote_eval/models.env`, and checks the evaluator launcher. VPP also retains `best.pt` as a separately labeled diagnostic checkpoint.
 
 The defaults are 30,000 π0.5 optimizer steps and 50,000 VPP optimizer steps. This is a long-running job and the first run also downloads and converts a large dataset. Run it inside `tmux` or an equivalent scheduler allocation. Interrupted training is resumable: rerun the same command with the same settings. Do not change the step counts or data paths while resuming.
+
+The public Bridge release does not guarantee that every SimplerEnv evaluation task has a matching demonstration. `simpler_bridge_manifest.json` records `task_coverage`; absent families remain valid unseen-task generalization evaluations. Both policies always receive the same observed training episodes and split.
 
 Before committing to the full run, an isolated short integration test is useful:
 

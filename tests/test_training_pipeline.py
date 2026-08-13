@@ -21,6 +21,7 @@ class BridgeConversionTest(unittest.TestCase):
                             {
                                 "name": "spoon",
                                 "required_groups": [["spoon"], ["towel", "tablecloth"]],
+                                "excluded_terms": ["take", " off "],
                             }
                         ]
                     }
@@ -29,6 +30,7 @@ class BridgeConversionTest(unittest.TestCase):
             )
             filters = load_task_filters(path)
         self.assertEqual(matching_task("Put the spoon on the TABLECLOTH", filters), "spoon")
+        self.assertIsNone(matching_task("take the spoon off the tablecloth", filters))
         self.assertIsNone(matching_task("put the carrot on a plate", filters))
 
     def test_task_filter_rejects_empty_groups(self):

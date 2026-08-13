@@ -49,6 +49,9 @@ def load_task_filters(path: str | os.PathLike[str] | None) -> list[dict[str, Any
         groups = task.get("required_groups")
         if not isinstance(groups, list) or not groups or any(not group for group in groups):
             raise ValueError(f"invalid required_groups for task {task!r}")
+        excluded_terms = task.get("excluded_terms", [])
+        if not isinstance(excluded_terms, list) or any(not str(term).strip() for term in excluded_terms):
+            raise ValueError(f"invalid excluded_terms for task {task!r}")
     return tasks
 
 
@@ -57,7 +60,14 @@ def matching_task(instruction: str, filters: list[dict[str, Any]]) -> str | None
         return "all"
     normalized = " ".join(instruction.casefold().split())
     for task in filters:
-        if all(any(str(term).casefold() in normalized for term in group) for group in task["required_groups"]):
+        required_match = all(
+            any(str(term).casefold() in normalized for term in group)
+            for group in task["required_groups"]
+        )
+        excluded_match = any(
+            str(term).casefold() in normalized for term in task.get("excluded_terms", [])
+        )
+        if required_match and not excluded_match:
             return str(task["name"])
     return None
 
@@ -219,9 +229,11 @@ def convert(
         expected_tasks = {str(task["name"]) for task in filters}
         missing_tasks = sorted(expected_tasks - matched_by_task.keys())
         if missing_tasks:
-            raise RuntimeError(
-                "the Bridge source contained no matching episodes for required task filters: "
+            print(
+                "WARNING: the Bridge source contained no matching episodes for task filters: "
                 + ", ".join(missing_tasks)
+                + ". These will be evaluated as unseen task families.",
+                flush=True,
             )
         for dataset in datasets.values():
             dataset.stop_image_writer()
@@ -239,6 +251,11 @@ def convert(
             "task_filter": None if task_filter is None else str(task_filter.resolve()),
             "counts": counts,
             "matched_by_task": matched_by_task,
+            "task_coverage": {
+                "expected": sorted(expected_tasks),
+                "observed": sorted(matched_by_task),
+                "missing": missing_tasks,
+            },
             "repositories": {"train": TRAIN_REPO_ID, "val": VAL_REPO_ID},
         }
         with open(output_home / "simpler_bridge_manifest.json", "w", encoding="utf-8") as stream:

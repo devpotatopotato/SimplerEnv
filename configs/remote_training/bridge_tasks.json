@@ -3,19 +3,21 @@
   "tasks": [
     {
       "name": "spoon_on_towel",
-      "required_groups": [["spoon"], ["towel", "tablecloth", "table cloth"]]
+      "required_groups": [["spoon"], ["towel", "tablecloth", "table cloth"], ["put", "place", "move"]],
+      "excluded_terms": ["take", "remove", " off "]
     },
     {
       "name": "carrot_on_plate",
-      "required_groups": [["carrot"], ["plate"]]
+      "required_groups": [["carrot"], ["plate"], ["put", "place", "move"]],
+      "excluded_terms": ["take", "remove", " off "]
     },
     {
       "name": "stack_cube",
-      "required_groups": [["stack"], ["cube", "block"]]
+      "required_groups": [["green block", "green cube"], ["yellow block", "yellow cube"], ["put", "place", "stack"]]
     },
     {
       "name": "eggplant_in_basket",
-      "required_groups": [["eggplant"], ["basket"]]
+      "required_groups": [["eggplant"], ["basket"], ["put", "place", "move"]]
     }
   ]
 }
