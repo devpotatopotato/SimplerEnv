@@ -6,6 +6,8 @@ setup(
     author="Xuanlin Li",
     # ``simpler_protocol`` deliberately has no simulator or model-framework
     # dependencies.  Policy servers can install it without importing SAPIEN.
-    packages=find_packages(include=["simpler_env*", "simpler_protocol*", "policy_servers*"]),
+    packages=find_packages(
+        include=["simpler_env*", "simpler_protocol*", "policy_servers*", "simpler_training*"]
+    ),
     python_requires=">=3.10",
 )

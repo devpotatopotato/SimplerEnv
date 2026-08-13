@@ -56,7 +56,7 @@ Use the adapted track as the primary result:
 1. Use the same Bridge/WidowX demonstrations, train/validation split, language labels, primary third-person camera, and proprioception availability for all models. The current profile is `simpler_widowx_cartesian_v1`.
 2. Convert training labels once to physical `Δxyz + Δaxis-angle + gripper-open`; store normalization statistics from the training split only.
 3. Freeze each large visual/world-model backbone and train its action head or a parameter-efficient adapter. This is feasible on two 96 GB GPUs and is a more defensible common budget than full end-to-end tuning, which has very different cost across these architectures.
-4. Match optimizer-step or GPU-hour budgets, report trainable parameter counts and actual GPU hours, and select checkpoints only on the common validation set.
+4. Predeclare architecture-appropriate optimizer-step or GPU-hour budgets, report trainable parameter counts and actual GPU hours, and use the final checkpoint for every primary result. If validation-based selection is studied, apply the same rule to every model and label it separately.
 5. Evaluate the untouched test tasks with exactly this config. Use identical seeds, `execution_horizon`, safety bounds, maximum steps, and camera inputs.
 6. Report task success rate plus round-trip/server latency, clipping rate, memory, training cost, and per-task results. Run zero-shot released checkpoints in a separate table; never average them into the adapted comparison.
 
@@ -73,11 +73,14 @@ The repository includes a uv-based setup and sequential launcher. It creates fou
 ```bash
 cd /path/to/SimplerEnv
 ./scripts/remote_eval/setup.sh
+./scripts/remote_eval/smoke_test.sh
 
-# Add the three adapted checkpoint/config paths created by your training runs.
+# π0.5 and VPP can be adapted automatically after setup.
+TRAIN_GPUS=0,1 ./scripts/remote_eval/train.sh
+
+# Add the Cosmos checkpoint/configuration separately when it is available.
 nano scripts/remote_eval/models.env
 
-./scripts/remote_eval/smoke_test.sh
 ./scripts/remote_eval/run.sh
 ```
 
@@ -93,7 +96,48 @@ Setup can be performed in pieces and safely rerun:
 
 If a full setup is interrupted or one model fails, rerun only that component. Existing downloads and uv caches are reused; completed environments are not recreated from scratch.
 
-Use `./scripts/remote_eval/run.sh --dry-run` to validate paths and print all commands. `--models pi05` runs just one policy, while `--continue-on-error` attempts the remaining policies if one fails. See [`models.env.example`](../scripts/remote_eval/models.env.example) for required values. The setup script does not and cannot create the three adapted policy checkpoints.
+Use `./scripts/remote_eval/run.sh --dry-run` to validate paths and print all commands. `--models pi05` runs just one policy, while `--continue-on-error` attempts the remaining policies if one fails. See [`models.env.example`](../scripts/remote_eval/models.env.example) for required values. The setup script installs software; `train.sh` creates the π0.5 and VPP adaptations. Cosmos still requires a compatible Cartesian checkpoint trained through NVIDIA's upstream workflow.
+
+## Adapt π0.5 and VPP on two GPUs
+
+After `setup.sh` and `smoke_test.sh` pass, run:
+
+```bash
+cd /path/to/SimplerEnv
+TRAIN_GPUS=0,1 ./scripts/remote_eval/train.sh 2>&1 | tee train-all.log
+```
+
+This command performs the complete workflow without manual checkpoint editing:
+
+1. Installs the OpenPI RLDS extras and the small VPP data-reader dependency into their existing isolated environments.
+2. Downloads the public Bridge dataset and selects demonstrations matching the four default evaluation task families.
+3. Creates one deterministic 90/10 train/validation split with canonical `Δxyz + Δaxis-angle + gripper` labels.
+4. Computes π0.5 normalization statistics from the training split and trains a JAX LoRA adaptation from `pi05_base`.
+5. Downloads VPP's public frozen SVD/CLIP backbones and trains its 7-D action policy with two-process bf16 data parallelism.
+6. Records common validation loss, uses each model's predeclared final step for the primary comparison, writes both artifact paths into `scripts/remote_eval/models.env`, and checks the evaluator launcher. VPP also retains `best.pt` as a separately labeled diagnostic checkpoint.
+
+The defaults are 30,000 π0.5 optimizer steps and 50,000 VPP optimizer steps. This is a long-running job and the first run also downloads and converts a large dataset. Run it inside `tmux` or an equivalent scheduler allocation. Interrupted training is resumable: rerun the same command with the same settings. Do not change the step counts or data paths while resuming.
+
+Before committing to the full run, an isolated short integration test is useful:
+
+```bash
+BRIDGE_DATA_HOME="$PWD/.remote_eval/data/bridge_trial" \
+TRAINING_HOME="$PWD/.remote_eval/training_trial" \
+BRIDGE_MAX_EPISODES=200 \
+PI05_TRAIN_STEPS=10 PI05_SAVE_INTERVAL=5 \
+VPP_TRAIN_STEPS=10 VPP_SAVE_INTERVAL=5 \
+TRAIN_GPUS=0,1 ./scripts/remote_eval/train.sh 2>&1 | tee train-trial.log
+```
+
+The trial intentionally uses separate data and checkpoint directories. A successful trial temporarily points `models.env` at trial weights; the later full command overwrites those entries with full-run weights.
+
+When the full command prints `training pipeline complete`, evaluate only the two trained models with:
+
+```bash
+POLICY_GPU=0 EVAL_GPU=1 ./scripts/remote_eval/run.sh --models pi05,vpp
+```
+
+`train.sh --models pi05` or `--models vpp` trains only one model. `train.sh --data-only` only prepares the shared dataset, and `train.sh --dry-run` prints the commands without training. Training uses both listed GPUs; evaluation is sequential and uses GPU 0 for the current policy server and GPU 1 for headless SAPIEN.
 
 Use the repository's normal SimplerEnv installation in one environment. No X server or desktop is required. The config passes `offscreen_only=true` and `device=cuda:1` directly to SAPIEN's Vulkan renderer.
 

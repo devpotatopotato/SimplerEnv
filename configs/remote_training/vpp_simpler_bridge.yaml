@@ -1,0 +1,57 @@
+seed: 42
+
+# The trainer replaces these two paths and writes the resolved configuration
+# next to the checkpoint. The policy server reads that resolved copy.
+model:
+  _target_: policy_models.VPP_policy.VPP_Policy
+  _recursive_: false
+  latent_dim: 384
+  multistep: 16
+  sampler_type: ddim
+  num_sampling_steps: 10
+  sigma_data: 0.5
+  sigma_min: 0.001
+  sigma_max: 80
+  noise_scheduler: exponential
+  sigma_sample_density_type: loglogistic
+  use_lr_scheduler: true
+  act_window_size: 16
+  obs_seq_len: 1
+  action_dim: 7
+  action_seq_len: 16
+  use_text_not_embedding: true
+  seed: ${seed}
+  Former_depth: 6
+  Former_heads: 8
+  Former_dim_head: 64
+  Former_num_time_embeds: 16
+  num_latents: 224
+  pretrained_model_path: REQUIRED
+  text_encoder_path: REQUIRED
+  use_position_encoding: false
+  use_Former: 3d
+  timestep: 20
+  use_all_layer: true
+  extract_layer_idx: 1
+  optimizer:
+    _target_: torch.optim.AdamW
+    transformer_weight_decay: 0.05
+    obs_encoder_weight_decay: 0.05
+    learning_rate: 0.0001
+    betas: [0.9, 0.9]
+  lr_scheduler:
+    lr_scheduler:
+      init_lr: 0.0001
+      init_lr_scale: 0.1
+      final_lr_scale: 0.000001
+      total_steps: 50000
+      phase_ratio: "(0.02, 0.08, 0.9)"
+      lr: 0.0001
+
+# VPP learns bounded normalized actions. The policy server applies this exact
+# inverse transform before returning the common physical controller action.
+action_adapter:
+  kind: normalized_symmetric
+  output_scale: [0.05, 0.05, 0.05, 0.25, 0.25, 0.25, 1.0]
+  clip_normalized: true
+  encoding: eef_delta_axis_angle_gripper_v1

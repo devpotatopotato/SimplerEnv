@@ -37,7 +37,8 @@ Environment overrides:
   VPP_TORCHVISION_VERSION Matching torchvision version (default: 0.22.1)
   ALLOW_SOURCE_REVISION_MISMATCH=1  Keep an existing checkout at another revision
 
-The script never downloads adapted policy checkpoints. Fill models.env after setup.
+The script installs dependencies but does not train policy checkpoints. After
+setup, train.sh can adapt π0.5 and VPP and fill their models.env entries.
 EOF
 }
 
@@ -168,6 +169,9 @@ setup_vpp() {
     uv pip install --python "$python_bin" --index-url "$VPP_TORCH_INDEX" \
         "torch==${VPP_TORCH_VERSION}" "torchvision==${VPP_TORCHVISION_VERSION}"
     uv pip install --python "$python_bin" "numpy==1.26.4"
+    # The training pipeline reads the same LeRobot parquet episodes as OpenPI
+    # without installing LeRobot (and its conflicting torch requirements).
+    uv pip install --python "$python_bin" "pyarrow==20.0.0"
     VPP_REQUIREMENTS_FILE="$(mktemp "${REMOTE_EVAL_HOME}/vpp-requirements.XXXXXX.txt")"
     trap '[[ -z "$VPP_REQUIREMENTS_FILE" ]] || rm -f -- "$VPP_REQUIREMENTS_FILE"' EXIT
     sed '/^[[:space:]]*torch==/d' "${source_dir}/requirements.txt" >"$VPP_REQUIREMENTS_FILE"
@@ -214,9 +218,11 @@ cat <<EOF
 Setup complete.
 
 Next:
-  1. Edit ${SCRIPT_DIR}/models.env with your adapted checkpoint paths.
-  2. Test rendering: ${SCRIPT_DIR}/smoke_test.sh
-  3. Run all models: ${SCRIPT_DIR}/run.sh
+  1. Test rendering: ${SCRIPT_DIR}/smoke_test.sh
+  2. Adapt π0.5 and VPP: TRAIN_GPUS=0,1 ${SCRIPT_DIR}/train.sh
+  3. Evaluate trained models: ${SCRIPT_DIR}/run.sh --models pi05,vpp
+
+For Cosmos, edit ${SCRIPT_DIR}/models.env with a compatible Cartesian checkpoint.
 
 Environments and upstream sources are under:
   ${REMOTE_EVAL_HOME}

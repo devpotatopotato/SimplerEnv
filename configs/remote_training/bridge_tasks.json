@@ -1,0 +1,21 @@
+{
+  "description": "Bridge instructions corresponding to the four default SimplerEnv WidowX tasks.",
+  "tasks": [
+    {
+      "name": "spoon_on_towel",
+      "required_groups": [["spoon"], ["towel", "tablecloth", "table cloth"]]
+    },
+    {
+      "name": "carrot_on_plate",
+      "required_groups": [["carrot"], ["plate"]]
+    },
+    {
+      "name": "stack_cube",
+      "required_groups": [["stack"], ["cube", "block"]]
+    },
+    {
+      "name": "eggplant_in_basket",
+      "required_groups": [["eggplant"], ["basket"]]
+    }
+  ]
+}

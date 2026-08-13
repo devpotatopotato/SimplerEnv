@@ -60,6 +60,23 @@ class VPPBackend(PolicyBackend):
         if callable(process_device):
             process_device()
         self.output_mode = args.output_mode
+        adapter = config.get("action_adapter", {})
+        self.action_adapter_kind = str(adapter.get("kind", "identity"))
+        self.action_output_scale = np.asarray(adapter.get("output_scale", [1.0] * 7), dtype=np.float64)
+        self.clip_normalized = bool(adapter.get("clip_normalized", False))
+        if self.action_adapter_kind not in ("identity", "normalized_symmetric"):
+            raise ValueError(f"unsupported VPP action_adapter.kind: {self.action_adapter_kind}")
+        if self.action_output_scale.shape != (7,) or np.any(self.action_output_scale <= 0):
+            raise ValueError("VPP action_adapter.output_scale must contain seven positive values")
+        if args.output_mode == "canonical" and self.action_adapter_kind == "normalized_symmetric":
+            missing_policy = [
+                name for name in missing if name.startswith(("Video_Former.", "model."))
+            ]
+            if missing_policy or unexpected:
+                raise ValueError(
+                    "adapted VPP checkpoint is incomplete or incompatible: "
+                    f"missing_policy={missing_policy[:10]}, unexpected={unexpected[:10]}"
+                )
         profile = (
             args.policy_profile
             if args.policy_profile
@@ -81,6 +98,8 @@ class VPPBackend(PolicyBackend):
             extra={
                 "video_model_path": args.video_model_path,
                 "image_size": args.image_size,
+                "action_adapter": self.action_adapter_kind,
+                "action_output_scale": self.action_output_scale.tolist(),
                 "upstream_revision": git_revision(args.vpp_root),
             },
         )
@@ -119,7 +138,12 @@ class VPPBackend(PolicyBackend):
         with self.torch.inference_mode():
             actions = self.model.eval_forward(observation, {"lang_text": instruction})
         actions = actions.detach().float().cpu().numpy()
-        if self.output_mode == "calvin_normalized":
+        if self.output_mode == "canonical" and self.action_adapter_kind == "normalized_symmetric":
+            actions = np.asarray(actions, dtype=np.float64)[..., :7]
+            if self.clip_normalized:
+                actions = np.clip(actions, -1.0, 1.0)
+            actions = actions * self.action_output_scale
+        elif self.output_mode == "calvin_normalized":
             actions = np.asarray(actions, dtype=np.float64)
             converted = np.zeros_like(actions[..., :7])
             flat_input = actions.reshape(-1, actions.shape[-1])

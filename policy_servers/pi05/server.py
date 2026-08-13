@@ -40,6 +40,13 @@ class Pi05Backend(PolicyBackend):
         from openpi.shared import download
         from openpi.training import config as openpi_config
 
+        if args.config_name == "pi05_simpler_bridge_lora":
+            # The training config lives in this repository so the pinned
+            # upstream checkout stays unmodified and auditable.
+            from simpler_training.openpi_config import register_config
+
+            register_config()
+
         config = openpi_config.get_config(args.config_name)
         checkpoint = download.maybe_download(args.checkpoint)
         self.policy = policy_config.create_trained_policy(config, checkpoint, pytorch_device=args.device)

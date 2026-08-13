@@ -11,7 +11,7 @@ ENV_ROOT="${ENV_ROOT:-${REMOTE_EVAL_HOME}/envs}"
 
 ENV_FILE="${SCRIPT_DIR}/models.env"
 BASE_CONFIG="${REPO_ROOT}/configs/remote_eval/widowx_bridge.json"
-SELECTED_MODELS="pi05,vpp,cosmos3"
+SELECTED_MODELS=""
 POLICY_GPU="${POLICY_GPU:-0}"
 EVAL_GPU="${EVAL_GPU:-1}"
 POLICY_PORT="${POLICY_PORT:-18765}"
@@ -31,7 +31,8 @@ Runs one model at a time on POLICY_GPU and SimplerEnv on EVAL_GPU.
 Options:
   --env-file PATH       Checkpoint/config variables (default: models.env)
   --config PATH         Evaluation JSON (default: widowx_bridge.json)
-  --models LIST         Comma-separated pi05,vpp,cosmos3 (default: all three)
+  --models LIST         Comma-separated pi05,vpp,cosmos3 (default: TRAINED_MODELS
+                        from the env file, otherwise all three)
   --run-tag NAME        Shared result/log suffix
   --dry-run             Validate and print commands without starting models
   --continue-on-error   Continue with the next model after a failed evaluation
@@ -98,6 +99,8 @@ done
 [[ -f "$ENV_FILE" ]] || die "missing $ENV_FILE; copy models.env.example and fill its paths"
 # shellcheck source=/dev/null
 source "$ENV_FILE"
+
+SELECTED_MODELS="${SELECTED_MODELS:-${TRAINED_MODELS:-pi05,vpp,cosmos3}}"
 
 EVAL_PYTHON="${ENV_ROOT}/simpler/bin/python"
 PI05_ROOT="${SOURCE_ROOT}/openpi"
