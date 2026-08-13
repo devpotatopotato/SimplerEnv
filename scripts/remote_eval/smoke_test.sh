@@ -8,7 +8,7 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 REMOTE_EVAL_HOME="${REMOTE_EVAL_HOME:-${REPO_ROOT}/.remote_eval}"
 EVAL_PYTHON="${REMOTE_EVAL_HOME}/envs/simpler/bin/python"
 EVAL_GPU="${EVAL_GPU:-1}"
-POLICY_PORT="${POLICY_PORT:-8000}"
+POLICY_PORT="${POLICY_PORT:-18765}"
 RUN_TAG="smoke-$(date -u +%Y%m%dT%H%M%SZ)"
 RUNTIME_DIR="${REPO_ROOT}/results/remote_eval_smoke/_launcher/${RUN_TAG}"
 RUNTIME_CONFIG="${RUNTIME_DIR}/smoke.json"
@@ -16,6 +16,24 @@ SERVER_PID=""
 
 [[ -x "$EVAL_PYTHON" ]] || { echo "Run setup.sh --models eval first" >&2; exit 1; }
 mkdir -p "$RUNTIME_DIR"
+
+if "$EVAL_PYTHON" - "$POLICY_PORT" <<'PY'
+import socket
+import sys
+
+sock = socket.socket()
+sock.settimeout(0.5)
+try:
+    sock.connect(("127.0.0.1", int(sys.argv[1])))
+except OSError:
+    raise SystemExit(1)
+finally:
+    sock.close()
+PY
+then
+    echo "TCP port $POLICY_PORT is already in use; set POLICY_PORT to another value" >&2
+    exit 1
+fi
 
 cleanup() {
     if [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then

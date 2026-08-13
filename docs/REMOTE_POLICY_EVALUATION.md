@@ -81,6 +81,8 @@ nano scripts/remote_eval/models.env
 ./scripts/remote_eval/run.sh
 ```
 
+The automated scripts use the uncommon local port `18765` by default to avoid services commonly bound to port 8000. Override it consistently with, for example, `POLICY_PORT=29173 ./scripts/remote_eval/run.sh`.
+
 Setup can be performed in pieces and safely rerun:
 
 ```bash

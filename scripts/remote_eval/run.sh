@@ -14,7 +14,7 @@ BASE_CONFIG="${REPO_ROOT}/configs/remote_eval/widowx_bridge.json"
 SELECTED_MODELS="pi05,vpp,cosmos3"
 POLICY_GPU="${POLICY_GPU:-0}"
 EVAL_GPU="${EVAL_GPU:-1}"
-POLICY_PORT="${POLICY_PORT:-8000}"
+POLICY_PORT="${POLICY_PORT:-18765}"
 SERVER_START_TIMEOUT="${SERVER_START_TIMEOUT:-1800}"
 RESULTS_DIR="${RESULTS_DIR:-${REPO_ROOT}/results/remote_eval}"
 RUN_TAG="${RUN_TAG:-$(date -u +%Y%m%dT%H%M%SZ)}"
@@ -38,7 +38,7 @@ Options:
   -h, --help            Show this help
 
 Environment overrides:
-  POLICY_GPU=0, EVAL_GPU=1, POLICY_PORT=8000
+  POLICY_GPU=0, EVAL_GPU=1, POLICY_PORT=18765
   SERVER_START_TIMEOUT=1800, RESULTS_DIR=<repo>/results/remote_eval
 
 Required checkpoint values are documented in models.env.example. Only adapted
