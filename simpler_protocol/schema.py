@@ -7,9 +7,12 @@ dataset-specific normalization must be undone in the policy server.
 from __future__ import annotations
 
 import base64
+import dataclasses
+import math
 import zlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -21,6 +24,42 @@ IMAGE_ENCODING = "zlib+base64"
 
 class ProtocolError(ValueError):
     """Raised when a request or response violates the shared contract."""
+
+
+def json_safe(value: Any) -> Any:
+    """Recursively convert simulator/model values into deterministic JSON data.
+
+    SAPIEN reset metadata may contain ``Pose`` objects. Keeping this conversion
+    dependency-free lets the policy protocol and evaluator share it without
+    importing SAPIEN in model-server environments.
+    """
+
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, np.generic):
+        return json_safe(value.item())
+    if isinstance(value, np.ndarray):
+        return json_safe(value.tolist())
+    if isinstance(value, Mapping):
+        return {str(key): json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [json_safe(item) for item in value]
+    if isinstance(value, Path):
+        return str(value)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return json_safe(dataclasses.asdict(value))
+    if hasattr(value, "p") and hasattr(value, "q"):
+        return {
+            "__type__": f"{type(value).__module__}.{type(value).__name__}",
+            "position": json_safe(np.asarray(value.p)),
+            "quaternion_wxyz": json_safe(np.asarray(value.q)),
+        }
+    return {
+        "__type__": f"{type(value).__module__}.{type(value).__name__}",
+        "repr": repr(value),
+    }
 
 
 def _finite_vector(value: Any, size: int, name: str) -> np.ndarray:

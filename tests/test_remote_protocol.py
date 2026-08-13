@@ -12,6 +12,7 @@ from simpler_protocol import (
     absolute_pose_chunk_to_deltas,
     decode_image,
     encode_image,
+    json_safe,
     quaternion_xyzw_to_rotvec,
     rotvec_to_quaternion_xyzw,
 )
@@ -34,6 +35,16 @@ class SchemaTest(unittest.TestCase):
             CanonicalAction(np.zeros(2), np.zeros(3), 1.0)
         with self.assertRaises(ProtocolError):
             CanonicalAction(np.zeros(3), np.zeros(3), 2.0)
+
+    def test_json_safe_serializes_pose_and_nonfinite_values(self):
+        class FakePose:
+            p = np.array([1.0, 2.0, 3.0])
+            q = np.array([1.0, 0.0, 0.0, 0.0])
+
+        result = json_safe({"pose": FakePose(), "invalid": float("nan")})
+        self.assertEqual(result["pose"]["position"], [1.0, 2.0, 3.0])
+        self.assertEqual(result["pose"]["quaternion_wxyz"], [1.0, 0.0, 0.0, 0.0])
+        self.assertIsNone(result["invalid"])
 
 
 class GeometryTest(unittest.TestCase):

@@ -14,6 +14,7 @@ from .schema import (
     ProtocolError,
     decode_image,
     encode_image,
+    json_safe,
     validate_metadata,
 )
 from .server import PolicyBackend, PolicyHTTPServer, serve_backend
@@ -31,6 +32,7 @@ __all__ = [
     "decode_image",
     "encode_image",
     "euler_xyz_to_rotvec",
+    "json_safe",
     "quaternion_xyzw_to_rotvec",
     "rotvec_to_quaternion_xyzw",
     "serve_backend",

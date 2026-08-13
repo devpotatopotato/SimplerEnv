@@ -7,7 +7,9 @@ def _base_env(env):
 
 def _robot_uid(env):
     base = _base_env(env)
-    return str(getattr(base, "robot_uid", getattr(env, "robot_uid", "")))
+    if hasattr(base, "robot_uid"):
+        return str(base.robot_uid)
+    return str(getattr(env, "robot_uid", ""))
 
 
 def default_camera_name(env):

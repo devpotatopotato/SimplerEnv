@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -16,21 +15,7 @@ import numpy as np
 import simpler_env
 from simpler_env.policies.remote_policy import RemotePolicy
 from simpler_env.utils.env.observation_utils import get_policy_observation
-from simpler_protocol import CanonicalAction
-
-
-def _jsonable(value):
-    if isinstance(value, dict):
-        return {str(key): _jsonable(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_jsonable(item) for item in value]
-    if isinstance(value, np.ndarray):
-        return value.tolist()
-    if isinstance(value, np.generic):
-        return value.item()
-    if isinstance(value, float) and not math.isfinite(value):
-        return None
-    return value
+from simpler_protocol import CanonicalAction, json_safe
 
 
 @dataclass
@@ -123,6 +108,7 @@ def run_episode(policy: RemotePolicy, config: EvaluationConfig, task: str, episo
     env_kwargs = dict(config.env_kwargs)
     env_kwargs.setdefault("max_episode_steps", config.max_episode_steps)
     env = simpler_env.make(task, **env_kwargs)
+    base_env = getattr(env, "unwrapped", env)
     episode_id = _episode_id(task, episode_index, seed)
     frames = []
     last_info: dict[str, Any] = {}
@@ -132,7 +118,7 @@ def run_episode(policy: RemotePolicy, config: EvaluationConfig, task: str, episo
     steps = 0
     try:
         obs, reset_info = env.reset(seed=seed)
-        instruction = str(env.get_language_instruction())
+        instruction = str(base_env.get_language_instruction())
         policy.reset(episode_id=episode_id, instruction=instruction, seed=seed, task=task)
         policy_obs = get_policy_observation(
             env,
@@ -165,12 +151,12 @@ def run_episode(policy: RemotePolicy, config: EvaluationConfig, task: str, episo
                 termination_reason = "environment_truncated"
                 break
             if action.terminate:
-                if bool(env.is_final_subtask()):
+                if bool(base_env.is_final_subtask()):
                     termination_reason = "policy_terminate"
                     break
-                env.advance_to_next_subtask()
+                base_env.advance_to_next_subtask()
 
-            new_instruction = str(env.get_language_instruction())
+            new_instruction = str(base_env.get_language_instruction())
             if new_instruction != instruction:
                 instruction = new_instruction
                 policy.set_instruction(instruction, seed=seed, task=task)
@@ -196,7 +182,7 @@ def run_episode(policy: RemotePolicy, config: EvaluationConfig, task: str, episo
             video_path = run_dir / "videos" / task / f"{episode_id}_{'success' if success else 'failure'}.mp4"
             write_video(str(video_path), frames, fps=config.video_fps)
             result["video"] = str(video_path.relative_to(run_dir))
-        return _jsonable(result)
+        return json_safe(result)
     finally:
         env.close()
 
@@ -204,7 +190,7 @@ def run_episode(policy: RemotePolicy, config: EvaluationConfig, task: str, episo
 def _write_json(path: Path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as stream:
-        json.dump(_jsonable(value), stream, indent=2, sort_keys=True)
+        json.dump(json_safe(value), stream, indent=2, sort_keys=True)
         stream.write("\n")
 
 
