@@ -91,6 +91,8 @@ Setup can be performed in pieces and safely rerun:
 ./scripts/remote_eval/setup.sh --models cosmos3
 ```
 
+If a full setup is interrupted or one model fails, rerun only that component. Existing downloads and uv caches are reused; completed environments are not recreated from scratch.
+
 Use `./scripts/remote_eval/run.sh --dry-run` to validate paths and print all commands. `--models pi05` runs just one policy, while `--continue-on-error` attempts the remaining policies if one fails. See [`models.env.example`](../scripts/remote_eval/models.env.example) for required values. The setup script does not and cannot create the three adapted policy checkpoints.
 
 Use the repository's normal SimplerEnv installation in one environment. No X server or desktop is required. The config passes `offscreen_only=true` and `device=cuda:1` directly to SAPIEN's Vulkan renderer.
