@@ -3,21 +3,21 @@
   "tasks": [
     {
       "name": "spoon_on_towel",
-      "required_groups": [["spoon"], ["towel", "tablecloth", "table cloth"], ["put", "place", "move"]],
-      "excluded_terms": ["take", "remove", " off "]
+      "match_patterns": ["\\b(?:put|place|move|pick up)\\b.*\\bspoon\\b.*\\b(?:on|onto)\\b.*\\b(?:towel|tablecloth|table cloth)\\b"],
+      "excluded_patterns": ["\\b(?:take|remove)\\b", "\\boff\\b", "\\b(?:left|right) side of\\b", "\\bbetween\\b"]
     },
     {
       "name": "carrot_on_plate",
-      "required_groups": [["carrot"], ["plate"], ["put", "place", "move"]],
-      "excluded_terms": ["take", "remove", " off "]
+      "match_patterns": ["\\b(?:put|place|move|pick up)\\b.*\\bcarrot\\b.*\\b(?:on|onto)\\b.*\\bplate\\b"],
+      "excluded_patterns": ["\\b(?:take|remove)\\b", "\\boff\\b", "\\b(?:left|right) side of\\b", "\\bbetween\\b"]
     },
     {
       "name": "stack_cube",
-      "required_groups": [["green block", "green cube"], ["yellow block", "yellow cube"], ["put", "place", "stack"]]
+      "match_patterns": ["\\b(?:put|place|move|stack)\\b.*\\bgreen (?:block|cube)\\b.*\\b(?:on|onto|above)\\b.*\\byellow (?:block|cube)\\b"]
     },
     {
       "name": "eggplant_in_basket",
-      "required_groups": [["eggplant"], ["basket"], ["put", "place", "move"]]
+      "match_patterns": ["\\b(?:put|place|move|pick up)\\b.*\\beggplant\\b.*\\b(?:in|into)\\b.*\\bbasket\\b"]
     }
   ]
 }

@@ -33,6 +33,20 @@ class BridgeConversionTest(unittest.TestCase):
         self.assertIsNone(matching_task("take the spoon off the tablecloth", filters))
         self.assertIsNone(matching_task("put the carrot on a plate", filters))
 
+    def test_repository_filter_rejects_related_but_wrong_tasks(self):
+        filters = load_task_filters("configs/remote_training/bridge_tasks.json")
+        self.assertEqual(
+            matching_task("PICK UP THE SPOON ANDPUT ON THE TOWEL", filters),
+            "spoon_on_towel",
+        )
+        self.assertIsNone(matching_task("Place the pot between the spoon and towel", filters))
+        self.assertIsNone(matching_task("Move the spoon to the right side of the towel.", filters))
+        self.assertIsNone(matching_task("take carrot off plate cardboardfence", filters))
+        self.assertEqual(
+            matching_task("put the green block on the yellow block", filters),
+            "stack_cube",
+        )
+
     def test_task_filter_rejects_empty_groups(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "tasks.json"

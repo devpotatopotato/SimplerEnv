@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 from typing import Any
 
@@ -47,11 +48,24 @@ def load_task_filters(path: str | os.PathLike[str] | None) -> list[dict[str, Any
         raise ValueError("task filter must contain a non-empty 'tasks' list")
     for task in tasks:
         groups = task.get("required_groups")
-        if not isinstance(groups, list) or not groups or any(not group for group in groups):
+        patterns = task.get("match_patterns")
+        has_groups = isinstance(groups, list) and bool(groups) and not any(not group for group in groups)
+        has_patterns = isinstance(patterns, list) and bool(patterns) and all(str(pattern).strip() for pattern in patterns)
+        if not has_groups and not has_patterns:
             raise ValueError(f"invalid required_groups for task {task!r}")
         excluded_terms = task.get("excluded_terms", [])
         if not isinstance(excluded_terms, list) or any(not str(term).strip() for term in excluded_terms):
             raise ValueError(f"invalid excluded_terms for task {task!r}")
+        excluded_patterns = task.get("excluded_patterns", [])
+        if not isinstance(excluded_patterns, list) or any(
+            not str(pattern).strip() for pattern in excluded_patterns
+        ):
+            raise ValueError(f"invalid excluded_patterns for task {task!r}")
+        try:
+            for pattern in [*(patterns or []), *excluded_patterns]:
+                re.compile(str(pattern), flags=re.IGNORECASE)
+        except (TypeError, re.error) as exc:
+            raise ValueError(f"invalid regular expression for task {task!r}: {exc}") from exc
     return tasks
 
 
@@ -60,12 +74,20 @@ def matching_task(instruction: str, filters: list[dict[str, Any]]) -> str | None
         return "all"
     normalized = " ".join(instruction.casefold().split())
     for task in filters:
-        required_match = all(
-            any(str(term).casefold() in normalized for term in group)
-            for group in task["required_groups"]
+        patterns = task.get("match_patterns")
+        required_match = (
+            any(re.search(str(pattern), normalized, flags=re.IGNORECASE) for pattern in patterns)
+            if patterns
+            else all(
+                any(str(term).casefold() in normalized for term in group)
+                for group in task["required_groups"]
+            )
         )
         excluded_match = any(
             str(term).casefold() in normalized for term in task.get("excluded_terms", [])
+        ) or any(
+            re.search(str(pattern), normalized, flags=re.IGNORECASE)
+            for pattern in task.get("excluded_patterns", [])
         )
         if required_match and not excluded_match:
             return str(task["name"])
@@ -107,7 +129,13 @@ def _dataset_features(image_shape: tuple[int, int, int]) -> dict[str, dict[str, 
     }
 
 
-def _make_dataset(repo_id: str, root: Path, fps: int, image_shape: tuple[int, int, int]):
+def _make_dataset(
+    repo_id: str,
+    root: Path,
+    fps: int,
+    image_shape: tuple[int, int, int],
+    image_writer_threads: int,
+):
     from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 
     return LeRobotDataset.create(
@@ -117,7 +145,7 @@ def _make_dataset(repo_id: str, root: Path, fps: int, image_shape: tuple[int, in
         fps=fps,
         features=_dataset_features(image_shape),
         use_videos=False,
-        image_writer_threads=8,
+        image_writer_threads=image_writer_threads,
     )
 
 
@@ -125,11 +153,14 @@ def _source_dataset(source: str):
     import tensorflow_datasets as tfds
 
     builder = tfds.builder_from_directory(builder_dir=source)
-    return builder.as_dataset(
+    dataset = builder.as_dataset(
         split="train",
         shuffle_files=False,
         read_config=tfds.ReadConfig(add_tfds_id=True),
     )
+    # Overlap remote TFDS reads with CPU image/parquet work. This does not use
+    # CUDA and keeps accelerator memory free for the model-training stages.
+    return dataset.prefetch(4)
 
 
 def convert(
@@ -139,6 +170,8 @@ def convert(
     validation_fraction: float,
     fps: int,
     max_episodes: int | None,
+    max_episodes_per_task: int | None,
+    image_writer_threads: int,
 ) -> dict[str, Any]:
     if not 0.0 < validation_fraction < 0.5:
         raise ValueError("validation_fraction must be between 0 and 0.5")
@@ -175,10 +208,11 @@ def convert(
             task_name = matching_task(instruction, filters)
             if task_name is None:
                 continue
-            if max_episodes is not None and filters:
-                per_task_limit = (max_episodes + len(filters) - 1) // len(filters)
-                if matched_by_task.get(task_name, 0) >= per_task_limit:
-                    continue
+            if (
+                max_episodes_per_task is not None
+                and matched_by_task.get(task_name, 0) >= max_episodes_per_task
+            ):
+                continue
             identifier = _text(episode.get("tfds_id", f"episode-{episode_index}"))
             split = "val" if _episode_is_validation(identifier, validation_fraction) else "train"
 
@@ -188,7 +222,9 @@ def convert(
                     raise ValueError(f"Bridge image must be HWC RGB, got {first_image.shape}")
                 shape = tuple(int(item) for item in first_image.shape)
                 datasets = {
-                    name: _make_dataset(repo_id, build_roots[name], fps, shape)
+                    name: _make_dataset(
+                        repo_id, build_roots[name], fps, shape, image_writer_threads
+                    )
                     for name, repo_id in (("train", TRAIN_REPO_ID), ("val", VAL_REPO_ID))
                 }
 
@@ -248,6 +284,8 @@ def convert(
             "fps": fps,
             "validation_fraction": validation_fraction,
             "max_episodes": max_episodes,
+            "max_episodes_per_task": max_episodes_per_task,
+            "image_writer_threads": image_writer_threads,
             "task_filter": None if task_filter is None else str(task_filter.resolve()),
             "counts": counts,
             "matched_by_task": matched_by_task,
@@ -282,9 +320,19 @@ def main() -> None:
     parser.add_argument("--validation-fraction", type=float, default=0.1)
     parser.add_argument("--fps", type=int, default=5)
     parser.add_argument("--max-episodes", type=int, help="limit matching episodes for a small trial")
+    parser.add_argument(
+        "--max-episodes-per-task",
+        type=int,
+        help="cap each task family independently; useful for a fast balanced trial",
+    )
+    parser.add_argument("--image-writer-threads", type=int, default=16)
     args = parser.parse_args()
     if args.max_episodes is not None and args.max_episodes < 2:
         parser.error("--max-episodes must be at least 2")
+    if args.max_episodes_per_task is not None and args.max_episodes_per_task < 1:
+        parser.error("--max-episodes-per-task must be positive")
+    if args.image_writer_threads < 1:
+        parser.error("--image-writer-threads must be positive")
     args.output_home.mkdir(parents=True, exist_ok=True)
     result = convert(
         args.source,
@@ -293,6 +341,8 @@ def main() -> None:
         args.validation_fraction,
         args.fps,
         args.max_episodes,
+        args.max_episodes_per_task,
+        args.image_writer_threads,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
 

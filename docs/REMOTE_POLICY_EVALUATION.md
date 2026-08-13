@@ -125,7 +125,7 @@ Before committing to the full run, an isolated short integration test is useful:
 ```bash
 BRIDGE_DATA_HOME="$PWD/.remote_eval/data/bridge_trial" \
 TRAINING_HOME="$PWD/.remote_eval/training_trial" \
-BRIDGE_MAX_EPISODES=200 \
+BRIDGE_MAX_EPISODES_PER_TASK=25 \
 PI05_TRAIN_STEPS=10 PI05_SAVE_INTERVAL=5 \
 VPP_TRAIN_STEPS=10 VPP_SAVE_INTERVAL=5 \
 TRAIN_GPUS=0,1 ./scripts/remote_eval/train.sh 2>&1 | tee train-trial.log

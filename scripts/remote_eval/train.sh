@@ -24,6 +24,8 @@ BRIDGE_SOURCE="${BRIDGE_SOURCE:-gs://gresearch/robotics/bridge/0.1.0}"
 BRIDGE_TASK_FILTER="${BRIDGE_TASK_FILTER:-${REPO_ROOT}/configs/remote_training/bridge_tasks.json}"
 BRIDGE_VALIDATION_FRACTION="${BRIDGE_VALIDATION_FRACTION:-0.1}"
 BRIDGE_MAX_EPISODES="${BRIDGE_MAX_EPISODES:-0}"
+BRIDGE_MAX_EPISODES_PER_TASK="${BRIDGE_MAX_EPISODES_PER_TASK:-0}"
+BRIDGE_IMAGE_WRITER_THREADS="${BRIDGE_IMAGE_WRITER_THREADS:-16}"
 
 PI05_TRAIN_STEPS="${PI05_TRAIN_STEPS:-30000}"
 PI05_BATCH_SIZE="${PI05_BATCH_SIZE:-32}"
@@ -58,6 +60,8 @@ Useful environment overrides:
   TRAIN_GPUS=0,1
   BRIDGE_SOURCE=gs://gresearch/robotics/bridge/0.1.0
   BRIDGE_MAX_EPISODES=0       0 means all matching episodes
+  BRIDGE_MAX_EPISODES_PER_TASK=0  0 means no per-task cap
+  BRIDGE_IMAGE_WRITER_THREADS=16  CPU image-writing concurrency
   PI05_TRAIN_STEPS=30000      PI05_BATCH_SIZE=32
   VPP_TRAIN_STEPS=50000       VPP_BATCH_SIZE=2
   VPP_GRADIENT_ACCUMULATION=4 TRAIN_NUM_WORKERS=4
@@ -175,18 +179,22 @@ if [[ -f "${TRAIN_DATASET}/meta/info.json" && -f "${VAL_DATASET}/meta/info.json"
 else
     [[ ! -e "$TRAIN_DATASET" && ! -e "$VAL_DATASET" ]] || \
         die "incomplete dataset exists under $DATA_HOME; inspect it and move it aside before retrying"
-    note "converting matching Bridge episodes into canonical train/validation repositories"
+    note "converting Bridge episodes on CPU/network/disk; GPUs begin at π0.5 training"
     DATA_COMMAND=(
-        env HF_LEROBOT_HOME="$DATA_HOME"
+        env CUDA_VISIBLE_DEVICES="" TF_CPP_MIN_LOG_LEVEL=2 HF_LEROBOT_HOME="$DATA_HOME"
         "$OPENPI_PYTHON" -m simpler_training.bridge_data
         --source "$BRIDGE_SOURCE"
         --output-home "$DATA_HOME"
         --task-filter "$BRIDGE_TASK_FILTER"
         --validation-fraction "$BRIDGE_VALIDATION_FRACTION"
         --fps 5
+        --image-writer-threads "$BRIDGE_IMAGE_WRITER_THREADS"
     )
     if ((BRIDGE_MAX_EPISODES > 0)); then
         DATA_COMMAND+=(--max-episodes "$BRIDGE_MAX_EPISODES")
+    fi
+    if ((BRIDGE_MAX_EPISODES_PER_TASK > 0)); then
+        DATA_COMMAND+=(--max-episodes-per-task "$BRIDGE_MAX_EPISODES_PER_TASK")
     fi
     run_command "${DATA_COMMAND[@]}"
 fi
