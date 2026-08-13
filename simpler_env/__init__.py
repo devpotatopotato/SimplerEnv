@@ -74,9 +74,12 @@ ENVIRONMENT_MAP = {
 def make(task_name, **kwargs):
     """Creates simulated eval environment from task name."""
     assert task_name in ENVIRONMENTS, f"Task {task_name} is not supported. Environments: \n {ENVIRONMENTS}"
-    env_name, env_kwargs = ENVIRONMENT_MAP[task_name]
+    env_name, default_env_kwargs = ENVIRONMENT_MAP[task_name]
+    # Never mutate ENVIRONMENT_MAP: repeated evaluator episodes may use
+    # different renderer devices or step limits in the same Python process.
+    env_kwargs = dict(default_env_kwargs)
     
-    env_kwargs["obs_mode"] = "rgbd",
+    env_kwargs["obs_mode"] = "rgbd"
     env_kwargs["prepackaged_config"] = True
 
     for key, value in kwargs.items():

@@ -1,0 +1,26 @@
+{
+  "tasks": ["widowx_spoon_on_towel"],
+  "episodes_per_task": 1,
+  "base_seed": 0,
+  "max_episode_steps": 5,
+  "request_horizon": 4,
+  "execution_horizon": 1,
+  "server_timeout_seconds": 30.0,
+  "required_policy_profile": "simpler_widowx_cartesian_v1",
+  "primary_camera": "3rd_view_camera",
+  "wrist_camera": null,
+  "save_video": false,
+  "video_fps": 5,
+  "output_dir": "results/remote_eval_smoke",
+  "env_kwargs": {
+    "renderer_kwargs": {
+      "offscreen_only": true,
+      "device": "cuda:1"
+    }
+  },
+  "safety": {
+    "translation_limit_m": [0.05, 0.05, 0.05],
+    "rotation_limit_rad": 0.25,
+    "mode": "clip"
+  }
+}

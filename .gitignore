@@ -27,3 +27,7 @@ dist/
 .vscode
 
 imgui.ini
+
+# Remote evaluation environments, upstream checkouts, and local checkpoint config
+.remote_eval/
+scripts/remote_eval/models.env

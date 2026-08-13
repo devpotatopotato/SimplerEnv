@@ -1,0 +1,31 @@
+{
+  "tasks": [
+    "widowx_spoon_on_towel",
+    "widowx_carrot_on_plate",
+    "widowx_stack_cube",
+    "widowx_put_eggplant_in_basket"
+  ],
+  "episodes_per_task": 10,
+  "base_seed": 0,
+  "max_episode_steps": 120,
+  "request_horizon": 16,
+  "execution_horizon": 1,
+  "server_timeout_seconds": 180.0,
+  "required_policy_profile": "simpler_widowx_cartesian_v1",
+  "primary_camera": "3rd_view_camera",
+  "wrist_camera": null,
+  "save_video": true,
+  "video_fps": 5,
+  "output_dir": "results/remote_eval",
+  "env_kwargs": {
+    "renderer_kwargs": {
+      "offscreen_only": true,
+      "device": "cuda:1"
+    }
+  },
+  "safety": {
+    "translation_limit_m": [0.05, 0.05, 0.05],
+    "rotation_limit_rad": 0.25,
+    "mode": "clip"
+  }
+}
