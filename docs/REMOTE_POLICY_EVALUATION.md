@@ -120,6 +120,12 @@ python -m simpler_env.evaluation.remote_evaluator \
 
 Your NVIDIA ICD and `libvulkan.so`/`libEGL_nvidia.so` installation are the important headless prerequisites. `vulkaninfo` is useful but not required by the pipeline. If SAPIEN reports a device-index error, run the evaluator with `CUDA_VISIBLE_DEVICES=1` and change the renderer device in the JSON to `cuda:0`, because visibility remaps the selected GPU.
 
+SAPIEN 2.2.2 still imports the deprecated `pkg_resources` module. The automated setup pins `setuptools==80.9.0`, the final compatible Setuptools series before that module was removed. For an evaluator environment created by an older version of the setup script, repair it with:
+
+```bash
+uv pip install --python .remote_eval/envs/simpler/bin/python "setuptools==80.9.0"
+```
+
 ## Start each policy on GPU 0
 
 Create a separate environment per upstream repository. In each one, install its official dependencies and then only this project's protocol/adapter:

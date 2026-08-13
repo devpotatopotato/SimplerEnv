@@ -136,6 +136,9 @@ setup_evaluator() {
     local python_bin="${env_dir}/bin/python"
     note "creating the SimplerEnv evaluator environment"
     uv venv --python 3.10 --allow-existing "$env_dir"
+    # SAPIEN 2.2.2 imports pkg_resources at runtime. Setuptools removed that
+    # module in v82, so retain the final compatible release in this legacy env.
+    uv pip install --python "$python_bin" "setuptools==80.9.0"
     uv pip install --python "$python_bin" "numpy==1.24.4"
     uv pip install --python "$python_bin" -e "${REPO_ROOT}/ManiSkill2_real2sim"
     uv pip install --python "$python_bin" -e "$REPO_ROOT" --no-deps
