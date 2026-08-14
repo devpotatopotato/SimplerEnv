@@ -65,7 +65,12 @@ def main() -> None:
             checkpoint_base_dir=str(checkpoints_root),
             train_steps=args.train_steps,
             batch_size=args.batch_size,
-            num_workers=args.num_workers,
+            # The pinned upstream compute_norm_stats.py is loaded dynamically
+            # and defines its RemoveStrings transform in that script module.
+            # Spawned DataLoader workers cannot import that dynamic module, so
+            # normalization must run in the main process. The training config
+            # is rebuilt below with the requested worker count.
+            num_workers=0,
             save_interval=args.save_interval,
             resume=resume,
         )
