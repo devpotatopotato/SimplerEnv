@@ -8,6 +8,16 @@ from typing import Any
 
 import numpy as np
 
+# OpenPI launches data-loader workers with the ``spawn`` multiprocessing
+# context. Transform classes must therefore be importable by module-qualified
+# name; defining them inside build_config() makes them unpicklable.
+from openpi.models import model as model_api
+from openpi.models import pi0_config
+import openpi.transforms as transforms
+from openpi.training import config as config_api
+from openpi.training import optimizer
+from openpi.training import weight_loaders
+
 CONFIG_NAME = "pi05_simpler_bridge_lora"
 DEFAULT_REPO_ID = "local/simpler_bridge_train"
 
@@ -23,6 +33,66 @@ def _parse_image(image: Any) -> np.ndarray:
     return image.astype(np.uint8, copy=False)
 
 
+@dataclasses.dataclass(frozen=True)
+class BridgeInputs(transforms.DataTransformFn):
+    model_type: model_api.ModelType
+
+    def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
+        base_image = _parse_image(data["observation/image"])
+        missing_wrist = np.zeros_like(base_image)
+        result: dict[str, Any] = {
+            "state": np.asarray(data["observation/state"], dtype=np.float32),
+            "image": {
+                "base_0_rgb": base_image,
+                "left_wrist_0_rgb": missing_wrist,
+                "right_wrist_0_rgb": missing_wrist.copy(),
+            },
+            "image_mask": {
+                "base_0_rgb": np.True_,
+                "left_wrist_0_rgb": np.False_,
+                "right_wrist_0_rgb": np.False_,
+            },
+        }
+        if "actions" in data:
+            result["actions"] = np.asarray(data["actions"], dtype=np.float32)
+        if "prompt" in data:
+            result["prompt"] = data["prompt"]
+        return result
+
+
+@dataclasses.dataclass(frozen=True)
+class BridgeOutputs(transforms.DataTransformFn):
+    def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
+        return {"actions": np.asarray(data["actions"])[..., :7]}
+
+
+@dataclasses.dataclass(frozen=True)
+class LeRobotBridgeDataConfig(config_api.DataConfigFactory):
+    def create(self, assets_dirs, model_config):
+        repack = transforms.Group(
+            inputs=[
+                transforms.RepackTransform(
+                    {
+                        "observation/image": "image",
+                        "observation/state": "state",
+                        "actions": "actions",
+                        "prompt": "prompt",
+                    }
+                )
+            ]
+        )
+        data_transforms = transforms.Group(
+            inputs=[BridgeInputs(model_type=model_config.model_type)],
+            outputs=[BridgeOutputs()],
+        )
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs, model_config),
+            repack_transforms=repack,
+            data_transforms=data_transforms,
+            model_transforms=config_api.ModelTransformFactory()(model_config),
+        )
+
+
 def build_config(
     *,
     repo_id: str = DEFAULT_REPO_ID,
@@ -35,71 +105,6 @@ def build_config(
     save_interval: int = 1_000,
     resume: bool = False,
 ):
-    # These imports occur only in the isolated OpenPI process.
-    from openpi.models import model as model_api
-    from openpi.models import pi0_config
-    from openpi.training import config as config_api
-    from openpi.training import optimizer
-    from openpi.training import weight_loaders
-    import openpi.transforms as transforms
-
-    @dataclasses.dataclass(frozen=True)
-    class BridgeInputs(transforms.DataTransformFn):
-        model_type: model_api.ModelType
-
-        def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
-            base_image = _parse_image(data["observation/image"])
-            missing_wrist = np.zeros_like(base_image)
-            result: dict[str, Any] = {
-                "state": np.asarray(data["observation/state"], dtype=np.float32),
-                "image": {
-                    "base_0_rgb": base_image,
-                    "left_wrist_0_rgb": missing_wrist,
-                    "right_wrist_0_rgb": missing_wrist.copy(),
-                },
-                "image_mask": {
-                    "base_0_rgb": np.True_,
-                    "left_wrist_0_rgb": np.False_,
-                    "right_wrist_0_rgb": np.False_,
-                },
-            }
-            if "actions" in data:
-                result["actions"] = np.asarray(data["actions"], dtype=np.float32)
-            if "prompt" in data:
-                result["prompt"] = data["prompt"]
-            return result
-
-    @dataclasses.dataclass(frozen=True)
-    class BridgeOutputs(transforms.DataTransformFn):
-        def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
-            return {"actions": np.asarray(data["actions"])[..., :7]}
-
-    @dataclasses.dataclass(frozen=True)
-    class LeRobotBridgeDataConfig(config_api.DataConfigFactory):
-        def create(self, assets_dirs, model_config):
-            repack = transforms.Group(
-                inputs=[
-                    transforms.RepackTransform(
-                        {
-                            "observation/image": "image",
-                            "observation/state": "state",
-                            "actions": "actions",
-                            "prompt": "prompt",
-                        }
-                    )
-                ]
-            )
-            data_transforms = transforms.Group(
-                inputs=[BridgeInputs(model_type=model_config.model_type)],
-                outputs=[BridgeOutputs()],
-            )
-            return dataclasses.replace(
-                self.create_base_config(assets_dirs, model_config),
-                repack_transforms=repack,
-                data_transforms=data_transforms,
-                model_transforms=config_api.ModelTransformFactory()(model_config),
-            )
-
     model = pi0_config.Pi0Config(
         pi05=True,
         action_horizon=16,
