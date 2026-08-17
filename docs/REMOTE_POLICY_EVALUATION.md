@@ -156,6 +156,11 @@ that stage. Model training begins after conversion. Completed conversion and
 training outputs are reused on later runs. Do not change step counts in the
 middle of a resumed primary run.
 
+To deliberately retrain π0.5 and VPP from step zero while reusing the converted
+dataset and downloaded public backbones, pass `--restart`. Previous model
+outputs, the manifest, and `models.env` are archived under
+`.remote_eval/training/_restarts/<timestamp>-<pid>/`; they are not deleted.
+
 The manifest records declared sample exposure: π0.5 uses 30,000 steps with
 global batch 32 (960,000 samples); VPP uses 50,000 updates with effective global
 batch 16 (800,000 samples). These are predeclared architecture-specific budgets,
@@ -168,6 +173,9 @@ Useful variants:
 ```bash
 # Run the complete preparation/training pipeline on one physical GPU.
 TRAIN_GPUS=3 ./scripts/remote_eval/train.sh
+
+# Intentionally restart π0.5 and VPP from step zero on one physical GPU.
+TRAIN_GPUS=5 ./scripts/remote_eval/train.sh --restart
 
 # Prepare or resume only selected policies.
 TRAIN_GPUS=3,4 ./scripts/remote_eval/train.sh --models pi05,vpp

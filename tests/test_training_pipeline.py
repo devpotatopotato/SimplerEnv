@@ -16,7 +16,11 @@ from simpler_training.bridge_data import (
 )
 from simpler_training.models_env import update
 from simpler_training.training_manifest import main as write_training_manifest
-from simpler_training.vpp_train import _load_policy_state_dict, _policy_state_dict
+from simpler_training.vpp_train import (
+    _load_policy_state_dict,
+    _load_training_checkpoint,
+    _policy_state_dict,
+)
 
 
 class BridgeConversionTest(unittest.TestCase):
@@ -164,6 +168,18 @@ class VPPCheckpointTest(unittest.TestCase):
                 self.FakeModel(missing=["model.inner_model.weight"]),
                 {"Video_Former.weight": "former"},
             )
+
+    def test_trainer_resume_uses_full_loader_for_local_checkpoint(self):
+        torch = mock.Mock()
+        expected = {"completed_steps": 1000}
+        torch.load.return_value = expected
+
+        result = _load_training_checkpoint(torch, Path("last.pt"))
+
+        self.assertIs(result, expected)
+        torch.load.assert_called_once_with(
+            Path("last.pt"), map_location="cpu", weights_only=False
+        )
 
 
 if __name__ == "__main__":

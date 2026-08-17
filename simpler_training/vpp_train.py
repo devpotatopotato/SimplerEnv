@@ -15,6 +15,19 @@ def _atomic_torch_save(torch, value, destination: Path) -> None:
     temporary.replace(destination)
 
 
+def _load_training_checkpoint(torch, path: Path):
+    """Load a trusted, locally produced trainer checkpoint.
+
+    ``last.pt`` contains optimizer and scheduler state in addition to tensors.
+    PyTorch 2.6 changed ``torch.load`` to default to ``weights_only=True``,
+    which rejects that state (including OmegaConf containers). These files are
+    written by this process under the selected output directory, so explicitly
+    use the full checkpoint loader when resuming them.
+    """
+
+    return torch.load(path, map_location="cpu", weights_only=False)
+
+
 def _policy_state_dict(model) -> dict:
     """Keep the learned VPP policy while omitting reloadable frozen encoders."""
 
@@ -169,7 +182,7 @@ def main() -> None:
     completed_steps = 0
     best_loss = float("inf")
     if last_path.is_file():
-        checkpoint = torch.load(last_path, map_location="cpu")
+        checkpoint = _load_training_checkpoint(torch, last_path)
         _load_policy_state_dict(accelerator.unwrap_model(model), checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
         scheduler.load_state_dict(checkpoint["scheduler"])

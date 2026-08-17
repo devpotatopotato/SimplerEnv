@@ -78,6 +78,49 @@ class RemoteEvalLauncherTest(unittest.TestCase):
         self.assertIn("shared-GPU mode", result.stdout)
         self.assertIn("physical GPU 0", result.stdout)
 
+    def test_training_restart_dry_run_archives_existing_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            remote_home = root / "remote"
+            pi_python = remote_home / "sources/openpi/.venv/bin/python"
+            pi_python.parent.mkdir(parents=True)
+            pi_python.symlink_to(sys.executable)
+            previous_output = remote_home / "training/pi05"
+            previous_output.mkdir(parents=True)
+            (previous_output / "marker").touch()
+
+            fake_bin = root / "bin"
+            _make_executable(fake_bin / "uv", "#!/usr/bin/env bash\nexit 0\n")
+            environment = os.environ.copy()
+            environment.update(
+                {
+                    "PATH": f"{fake_bin}:{environment['PATH']}",
+                    "REMOTE_EVAL_HOME": str(remote_home),
+                    "TRAIN_GPUS": "5",
+                }
+            )
+            result = subprocess.run(
+                [
+                    str(REPO_ROOT / "scripts/remote_eval/train.sh"),
+                    "--models",
+                    "pi05",
+                    "--restart",
+                    "--dry-run",
+                ],
+                cwd=REPO_ROOT,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertTrue((previous_output / "marker").is_file())
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("archiving previous pi05 training output", result.stdout)
+        self.assertIn("training π0.5 LoRA on GPUs 5", result.stdout)
+        self.assertIn("mv --", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

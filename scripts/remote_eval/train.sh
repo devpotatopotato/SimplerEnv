@@ -44,6 +44,7 @@ VPP_TRAIN_PORT="${VPP_TRAIN_PORT:-29673}"
 
 DRY_RUN=0
 DATA_ONLY=0
+RESTART=0
 
 usage() {
     cat <<'EOF'
@@ -56,6 +57,8 @@ updates models.env, and validates run.sh.
 Options:
   --models LIST  Comma-separated pi05,vpp,cosmos3 (default: all three)
   --data-only    Convert/validate the common dataset, then stop
+  --restart      Retrain selected pi05/vpp models from step zero. Existing
+                 outputs are moved to a timestamped archive; data is reused.
   --dry-run      Print commands without downloads, conversion, or training
   -h, --help     Show this help
 
@@ -73,6 +76,9 @@ Useful environment overrides:
 Interrupted model training resumes from last.pt/Orbax checkpoints. A complete
 dataset is reused. An incomplete dataset conversion is rejected rather than
 silently treated as complete.
+
+Use --restart only when you intentionally want a new training run. It preserves
+the converted Bridge dataset and downloaded public backbones.
 
 The default command uses two GPUs. One-GPU training and shared-GPU evaluation
 are also supported:
@@ -112,6 +118,10 @@ while (($#)); do
             DATA_ONLY=1
             shift
             ;;
+        --restart)
+            RESTART=1
+            shift
+            ;;
         --dry-run)
             DRY_RUN=1
             shift
@@ -125,6 +135,10 @@ while (($#)); do
             ;;
     esac
 done
+
+if ((DATA_ONLY == 1 && RESTART == 1)); then
+    die "--restart cannot be combined with --data-only"
+fi
 
 wants_model() {
     [[ ",${SELECTED_MODELS}," == *",$1,"* ]]
@@ -220,8 +234,48 @@ PI05_FINAL="${PI05_OUTPUT}/checkpoints/pi05_simpler_bridge_lora/bridge_lora/$((P
 VPP_OUTPUT="${TRAINING_HOME}/vpp"
 VPP_VIDEO_MODEL="${MODEL_HOME}/vpp/svd-robot"
 VPP_TEXT_ENCODER="${MODEL_HOME}/vpp/clip-vit-base-patch32"
+RESTART_ARCHIVE=""
+
+archive_training_output() {
+    local model="$1"
+    local source="$2"
+    ((RESTART == 1)) || return 0
+    if [[ ! -e "$source" ]]; then
+        note "restart requested for $model; no previous output exists at $source"
+        return 0
+    fi
+    if [[ -z "$RESTART_ARCHIVE" ]]; then
+        RESTART_ARCHIVE="${TRAINING_HOME}/_restarts/$(date -u +%Y%m%dT%H%M%SZ)-$$"
+        if ((DRY_RUN == 1)); then
+            print_command mkdir -p "$RESTART_ARCHIVE"
+            if [[ -f "${TRAINING_HOME}/training_manifest.json" ]]; then
+                print_command cp -p "${TRAINING_HOME}/training_manifest.json" \
+                    "${RESTART_ARCHIVE}/training_manifest.before_restart.json"
+            fi
+            if [[ -f "$MODELS_ENV" ]]; then
+                print_command cp -p "$MODELS_ENV" "${RESTART_ARCHIVE}/models.env.before_restart"
+            fi
+        else
+            mkdir -p "$RESTART_ARCHIVE"
+            if [[ -f "${TRAINING_HOME}/training_manifest.json" ]]; then
+                cp -p "${TRAINING_HOME}/training_manifest.json" \
+                    "${RESTART_ARCHIVE}/training_manifest.before_restart.json"
+            fi
+            if [[ -f "$MODELS_ENV" ]]; then
+                cp -p "$MODELS_ENV" "${RESTART_ARCHIVE}/models.env.before_restart"
+            fi
+        fi
+    fi
+    note "archiving previous $model training output at ${RESTART_ARCHIVE}/${model}"
+    if ((DRY_RUN == 1)); then
+        print_command mv -- "$source" "${RESTART_ARCHIVE}/${model}"
+    else
+        mv -- "$source" "${RESTART_ARCHIVE}/${model}"
+    fi
+}
 
 if wants_model pi05; then
+    archive_training_output pi05 "$PI05_OUTPUT"
     note "training π0.5 LoRA on GPUs $TRAIN_GPUS"
     PI05_COMMAND=(
         env CUDA_VISIBLE_DEVICES="$TRAIN_GPUS" HF_LEROBOT_HOME="$DATA_HOME" WANDB_MODE="${WANDB_MODE:-disabled}"
@@ -243,6 +297,7 @@ if wants_model pi05; then
 fi
 
 if wants_model vpp; then
+    archive_training_output vpp "$VPP_OUTPUT"
     note "downloading VPP's frozen public backbones when absent"
     run_command "$VPP_PYTHON" -m simpler_training.hf_download yjguo/svd-robot "$VPP_VIDEO_MODEL"
     run_command "$VPP_PYTHON" -m simpler_training.hf_download \
