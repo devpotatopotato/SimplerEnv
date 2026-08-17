@@ -223,6 +223,9 @@ Next:
   2. Prepare all models: TRAIN_GPUS=0,1 ${SCRIPT_DIR}/train.sh
   3. Evaluate all models: ${SCRIPT_DIR}/run.sh
 
+For a one-GPU pipeline, use TRAIN_GPUS=0 during training and set both
+POLICY_GPU=0 and EVAL_GPU=0 during evaluation.
+
 Environments and upstream sources are under:
   ${REMOTE_EVAL_HOME}
 EOF

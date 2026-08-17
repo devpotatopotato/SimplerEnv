@@ -3,7 +3,9 @@
 This pipeline evaluates all three policies on the SimplerEnv WidowX Bridge
 tasks without a desktop or X server. Policy inference and simulation are
 separate processes with isolated dependencies. A two-GPU run uses one RTX PRO
-6000 for the active policy and one for SAPIEN/Vulkan; models run sequentially.
+6000 for the active policy and one for SAPIEN/Vulkan. A one-GPU run keeps the
+same process boundary but shares one card between inference and rendering;
+models run sequentially in both modes.
 
 ## What is comparable
 
@@ -105,6 +107,9 @@ cd SimplerEnv
 EVAL_GPU=4 ./scripts/remote_eval/smoke_test.sh
 ```
 
+`smoke_test.sh` defaults to GPU 0, so the override is only needed when testing
+a different physical card.
+
 `setup.sh` creates isolated uv environments under `.remote_eval/`, clones the
 pinned upstream sources, installs Blackwell-compatible dependencies, and copies
 `models.env.example` to `models.env` only when the latter does not exist. It
@@ -161,6 +166,9 @@ already completed primary run's learning-rate schedule.
 Useful variants:
 
 ```bash
+# Run the complete preparation/training pipeline on one physical GPU.
+TRAIN_GPUS=3 ./scripts/remote_eval/train.sh
+
 # Prepare or resume only selected policies.
 TRAIN_GPUS=3,4 ./scripts/remote_eval/train.sh --models pi05,vpp
 ./scripts/remote_eval/train.sh --models cosmos3
@@ -186,7 +194,8 @@ TRAIN_GPUS=3,4 ./scripts/remote_eval/train.sh 2>&1 | tee train-trial.log
 
 ## Evaluate all three models
 
-Use one GPU for the policy and a different physical GPU for rendering:
+Two GPUs provide the most memory headroom and keep rendering isolated from
+policy inference:
 
 ```bash
 POLICY_GPU=3 EVAL_GPU=4 POLICY_PORT=43891 \
@@ -194,6 +203,20 @@ RUN_TAG=bridge-standard-v1 \
 ./scripts/remote_eval/run.sh --models pi05,vpp,cosmos3 --continue-on-error \
 2>&1 | tee eval-all.log
 ```
+
+To use one physical GPU, assign the same index to both processes:
+
+```bash
+POLICY_GPU=3 EVAL_GPU=3 POLICY_PORT=43891 \
+RUN_TAG=bridge-standard-v1-one-gpu \
+./scripts/remote_eval/run.sh --models pi05,vpp,cosmos3 --continue-on-error \
+2>&1 | tee eval-all-one-gpu.log
+```
+
+Shared-GPU mode is automatic when the indices are equal. CUDA inference and
+Vulkan rendering mostly alternate, but both processes retain their allocations,
+so this mode can be slower and needs enough combined VRAM. On a host that
+exposes only one GPU, `run.sh` automatically defaults both roles to GPU 0.
 
 The first Cosmos run downloads `nvidia/Cosmos3-Edge`, so its server startup can
 take much longer than later runs. `SERVER_START_TIMEOUT` defaults to 1800

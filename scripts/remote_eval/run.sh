@@ -13,7 +13,7 @@ ENV_FILE="${SCRIPT_DIR}/models.env"
 BASE_CONFIG="${REPO_ROOT}/configs/remote_eval/widowx_bridge.json"
 SELECTED_MODELS=""
 POLICY_GPU="${POLICY_GPU:-0}"
-EVAL_GPU="${EVAL_GPU:-1}"
+EVAL_GPU="${EVAL_GPU:-}"
 POLICY_PORT="${POLICY_PORT:-18765}"
 SERVER_START_TIMEOUT="${SERVER_START_TIMEOUT:-1800}"
 RESULTS_DIR="${RESULTS_DIR:-${REPO_ROOT}/results/remote_eval}"
@@ -26,7 +26,8 @@ usage() {
     cat <<'EOF'
 Usage: run.sh [options]
 
-Runs one model at a time on POLICY_GPU and SimplerEnv on EVAL_GPU.
+Runs one model at a time on POLICY_GPU and SimplerEnv on EVAL_GPU. The two
+processes may share one GPU when both indices are equal.
 
 Options:
   --env-file PATH       Checkpoint/config variables (default: models.env)
@@ -39,7 +40,8 @@ Options:
   -h, --help            Show this help
 
 Environment overrides:
-  POLICY_GPU=0, EVAL_GPU=1, POLICY_PORT=18765
+  POLICY_GPU=0, EVAL_GPU=1 when available (otherwise POLICY_GPU),
+  POLICY_PORT=18765
   SERVER_START_TIMEOUT=1800, RESULTS_DIR=<repo>/results/remote_eval
 
 Required checkpoint values are documented in models.env.example. π0.5 and VPP
@@ -113,13 +115,26 @@ COSMOS_PYTHON="${COSMOS_ROOT}/.venv/bin/python"
 
 [[ -x "$EVAL_PYTHON" ]] || die "evaluator environment is missing; run setup.sh"
 [[ -f "$BASE_CONFIG" ]] || die "evaluation config does not exist: $BASE_CONFIG"
-[[ "$POLICY_GPU" != "$EVAL_GPU" ]] || die "POLICY_GPU and EVAL_GPU must be different"
 command -v curl >/dev/null || die "curl is required for policy-server health checks"
 command -v nvidia-smi >/dev/null || die "nvidia-smi is required"
 
 GPU_COUNT="$(nvidia-smi --query-gpu=index --format=csv,noheader | wc -l)"
+[[ "$POLICY_GPU" =~ ^[0-9]+$ ]] || die "POLICY_GPU must be a non-negative integer"
+if [[ -z "$EVAL_GPU" ]]; then
+    if ((GPU_COUNT > 1)); then
+        EVAL_GPU=1
+    else
+        EVAL_GPU="$POLICY_GPU"
+    fi
+fi
+[[ "$EVAL_GPU" =~ ^[0-9]+$ ]] || die "EVAL_GPU must be a non-negative integer"
 ((POLICY_GPU >= 0 && POLICY_GPU < GPU_COUNT)) || die "POLICY_GPU=$POLICY_GPU is invalid for $GPU_COUNT GPUs"
 ((EVAL_GPU >= 0 && EVAL_GPU < GPU_COUNT)) || die "EVAL_GPU=$EVAL_GPU is invalid for $GPU_COUNT GPUs"
+if [[ "$POLICY_GPU" == "$EVAL_GPU" ]]; then
+    note "shared-GPU mode: policy inference and SAPIEN will use physical GPU $POLICY_GPU"
+    printf '%s\n' \
+        "Both processes keep GPU memory allocated at the same time; stop other GPU jobs if a model runs out of memory." >&2
+fi
 
 MODELS=()
 for model in ${SELECTED_MODELS//,/ }; do

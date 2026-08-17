@@ -74,8 +74,10 @@ Interrupted model training resumes from last.pt/Orbax checkpoints. A complete
 dataset is reused. An incomplete dataset conversion is rejected rather than
 silently treated as complete.
 
-The default command is the full two-GPU run:
+The default command uses two GPUs. One-GPU training and shared-GPU evaluation
+are also supported:
   TRAIN_GPUS=0,1 ./scripts/remote_eval/train.sh
+  TRAIN_GPUS=0 ./scripts/remote_eval/train.sh
 EOF
 }
 
@@ -337,7 +339,9 @@ run_command "$OPENPI_PYTHON" -m simpler_training.models_env "$MODELS_ENV" "${UPD
 note "validating the evaluation launcher against the produced artifacts"
 POLICY_GPU="${GPU_LIST[0]}"
 EVAL_GPU="${GPU_LIST[1]:-${GPU_LIST[0]}}"
-[[ "$POLICY_GPU" != "$EVAL_GPU" ]] || die "evaluation requires two distinct GPUs"
+if [[ "$POLICY_GPU" == "$EVAL_GPU" ]]; then
+    note "validating shared-GPU evaluation on physical GPU $POLICY_GPU"
+fi
 POLICY_GPU="$POLICY_GPU" EVAL_GPU="$EVAL_GPU" \
     "${SCRIPT_DIR}/run.sh" --models "$SELECTED_MODELS" --dry-run
 
