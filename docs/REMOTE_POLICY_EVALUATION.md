@@ -265,3 +265,14 @@ results/remote_eval/<run>/
 ```
 
 `server_metadata.json` is part of the result, not optional bookkeeping: it records the checkpoint, upstream Git revision when available, output conversion, policy profile, adaptation declaration, and observation requirements. The evaluator rejects a mismatched profile before creating an environment.
+
+Print an aligned overall and per-task comparison by passing the `RUN_TAG` used by `run.sh`:
+
+```bash
+./scripts/remote_eval/summary.sh bridge-full-eval
+```
+
+With no tag, `summary.sh` selects the most recently modified run under
+`results/remote_eval/_launcher`. Use `--models pi05,vpp` to require particular
+model results, `--json` for machine-readable output, or `--strict` to return a
+nonzero status when an artifact is missing or an episode count is incomplete.
