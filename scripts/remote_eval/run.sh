@@ -42,8 +42,9 @@ Environment overrides:
   POLICY_GPU=0, EVAL_GPU=1, POLICY_PORT=18765
   SERVER_START_TIMEOUT=1800, RESULTS_DIR=<repo>/results/remote_eval
 
-Required checkpoint values are documented in models.env.example. Only adapted
-canonical checkpoints are accepted by this fair-comparison launcher.
+Required checkpoint values are documented in models.env.example. π0.5 and VPP
+use the shared local Bridge adaptation. Cosmos3-Edge uses its released native
+Bridge domain and is reported as a separate training regime.
 EOF
 }
 
@@ -162,8 +163,15 @@ validate_model() {
         cosmos3)
             [[ -x "$COSMOS_PYTHON" ]] || die "Cosmos environment is missing; run setup.sh --models cosmos3"
             [[ -d "$COSMOS_ROOT" ]] || die "Cosmos source is missing: $COSMOS_ROOT"
-            require_path COSMOS_CHECKPOINT
+            require_value COSMOS_CHECKPOINT
+            if [[ "$COSMOS_CHECKPOINT" == */* || "$COSMOS_CHECKPOINT" == .* ]]; then
+                [[ -e "$COSMOS_CHECKPOINT" ]] || die "COSMOS_CHECKPOINT does not exist: $COSMOS_CHECKPOINT"
+            fi
             require_value COSMOS_DOMAIN_NAME
+            [[ "${COSMOS_CHECKPOINT^^}" != *DROID* ]] || \
+                die "DROID checkpoints emit Franka joint targets; use Cosmos3-Edge"
+            [[ "$COSMOS_DOMAIN_NAME" == "bridge_orig_lerobot" ]] || \
+                die "COSMOS_DOMAIN_NAME must be bridge_orig_lerobot for the native Bridge adapter"
             ;;
     esac
 }
@@ -177,17 +185,20 @@ RUNTIME_CONFIG="${LOG_DIR}/evaluation_gpu${EVAL_GPU}.json"
 mkdir -p "$LOG_DIR"
 
 # Snapshot the evaluation config with the selected physical renderer GPU.
-"$EVAL_PYTHON" - "$BASE_CONFIG" "$RUNTIME_CONFIG" "$EVAL_GPU" "$RESULTS_DIR" <<'PY'
+"$EVAL_PYTHON" - "$BASE_CONFIG" "$RUNTIME_CONFIG" "$EVAL_GPU" "$RESULTS_DIR" "${TRAINING_MANIFEST:-}" <<'PY'
 import json
 import pathlib
 import sys
 
-source, destination, gpu, output_dir = sys.argv[1:]
+source, destination, gpu, output_dir, training_manifest_value = sys.argv[1:]
 with open(source, encoding="utf-8") as stream:
     config = json.load(stream)
 config.setdefault("env_kwargs", {}).setdefault("renderer_kwargs", {})["offscreen_only"] = True
 config["env_kwargs"]["renderer_kwargs"]["device"] = f"cuda:{gpu}"
 config["output_dir"] = str(pathlib.Path(output_dir).resolve())
+training_manifest = pathlib.Path(training_manifest_value) if training_manifest_value else None
+if training_manifest is not None and training_manifest.is_file():
+    config["training_manifest"] = str(training_manifest.resolve())
 pathlib.Path(destination).parent.mkdir(parents=True, exist_ok=True)
 with open(destination, "w", encoding="utf-8") as stream:
     json.dump(config, stream, indent=2, sort_keys=True)
@@ -266,6 +277,7 @@ build_server_command() {
                 --confirm-canonical-adapted
                 --adaptation-dataset bridge_widowx
                 --adaptation-method "${PI05_ADAPTATION_METHOD:-action_head_or_adapter}"
+                --comparison-group "${PI05_COMPARISON_GROUP:-shared_bridge_adaptation}"
                 --host 127.0.0.1 --port "$POLICY_PORT"
             )
             ;;
@@ -282,6 +294,7 @@ build_server_command() {
                 --confirm-canonical-adapted
                 --adaptation-dataset bridge_widowx
                 --adaptation-method "${VPP_ADAPTATION_METHOD:-frozen_video_backbone_action_head}"
+                --comparison-group "${VPP_COMPARISON_GROUP:-shared_bridge_adaptation}"
                 --host 127.0.0.1 --port "$POLICY_PORT"
             )
             ;;
@@ -291,10 +304,10 @@ build_server_command() {
                 --cosmos-root "$COSMOS_ROOT"
                 --checkpoint "$COSMOS_CHECKPOINT"
                 --domain-name "$COSMOS_DOMAIN_NAME"
-                --confirm-cartesian-adapted
-                --gripper-output "${COSMOS_GRIPPER_OUTPUT:-open_fraction}"
-                --adaptation-dataset bridge_widowx
-                --adaptation-method "${COSMOS_ADAPTATION_METHOD:-frozen_backbone_action_adapter}"
+                --confirm-native-bridge-domain
+                --adaptation-dataset "${COSMOS_ADAPTATION_DATASET:-upstream_bridge_original}"
+                --adaptation-method "${COSMOS_ADAPTATION_METHOD:-native_bridge_action_head}"
+                --comparison-group "${COSMOS_COMPARISON_GROUP:-native_pretrained_bridge}"
                 --action-chunk-size 16
                 --host 127.0.0.1 --port "$POLICY_PORT"
             )

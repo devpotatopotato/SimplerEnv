@@ -38,7 +38,8 @@ Environment overrides:
   ALLOW_SOURCE_REVISION_MISMATCH=1  Keep an existing checkout at another revision
 
 The script installs dependencies but does not train policy checkpoints. After
-setup, train.sh can adapt π0.5 and VPP and fill their models.env entries.
+setup, train.sh adapts π0.5/VPP and configures Cosmos3-Edge's native Bridge
+domain in models.env.
 EOF
 }
 
@@ -219,10 +220,8 @@ Setup complete.
 
 Next:
   1. Test rendering: ${SCRIPT_DIR}/smoke_test.sh
-  2. Adapt π0.5 and VPP: TRAIN_GPUS=0,1 ${SCRIPT_DIR}/train.sh
-  3. Evaluate trained models: ${SCRIPT_DIR}/run.sh --models pi05,vpp
-
-For Cosmos, edit ${SCRIPT_DIR}/models.env with a compatible Cartesian checkpoint.
+  2. Prepare all models: TRAIN_GPUS=0,1 ${SCRIPT_DIR}/train.sh
+  3. Evaluate all models: ${SCRIPT_DIR}/run.sh
 
 Environments and upstream sources are under:
   ${REMOTE_EVAL_HOME}

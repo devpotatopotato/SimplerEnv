@@ -3,6 +3,10 @@ import unittest
 
 import numpy as np
 
+from policy_servers.cosmos3.server import (
+    cosmos_absolute_chunk_to_canonical,
+    simpler_pose_to_cosmos,
+)
 from policy_servers.mock_server import MockBackend
 from simpler_protocol import (
     CanonicalAction,
@@ -13,6 +17,8 @@ from simpler_protocol import (
     decode_image,
     encode_image,
     json_safe,
+    quaternion_inverse_xyzw,
+    quaternion_multiply_xyzw,
     quaternion_xyzw_to_rotvec,
     rotvec_to_quaternion_xyzw,
 )
@@ -65,6 +71,23 @@ class GeometryTest(unittest.TestCase):
         deltas = absolute_pose_chunk_to_deltas(chunk, [1.0, 2.0, 3.0], identity)
         np.testing.assert_allclose(deltas[0, :6], [0.1, 0, 0, 0, 0, 0], atol=1e-9)
         np.testing.assert_allclose(deltas[1, :6], [0, 0.2, 0, 0, 0, np.pi / 2], atol=1e-9)
+
+    def test_cosmos_bridge_tool_frame_round_trip(self):
+        current_position = np.array([0.35, -0.1, 0.22])
+        current_quaternion = rotvec_to_quaternion_xyzw([0.2, -0.1, 0.3])
+        target_position = current_position + np.array([0.01, -0.02, 0.005])
+        target_quaternion = rotvec_to_quaternion_xyzw([0.21, -0.08, 0.29])
+        model_position, model_quaternion = simpler_pose_to_cosmos(target_position, target_quaternion)
+        # Service output 0 means Bridge's pre-flip gripper label was 1=open.
+        output = np.array([[*model_position, *model_quaternion, 0.0]])
+        delta = cosmos_absolute_chunk_to_canonical(output, current_position, current_quaternion)[0]
+
+        np.testing.assert_allclose(delta[:3], target_position - current_position, atol=1e-9)
+        expected_rotation = quaternion_xyzw_to_rotvec(
+            quaternion_multiply_xyzw(target_quaternion, quaternion_inverse_xyzw(current_quaternion))
+        )
+        np.testing.assert_allclose(delta[3:6], expected_rotation, atol=1e-8)
+        self.assertEqual(delta[6], 1.0)
 
 
 class HTTPTest(unittest.TestCase):

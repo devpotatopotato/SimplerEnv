@@ -1,10 +1,16 @@
 import json
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
-from scripts.remote_eval.summarize_results import build_report, discover_models, format_report, latest_run_tag
+from scripts.remote_eval.summarize_results import (
+    _expected_episode_count,
+    build_report,
+    discover_models,
+    format_report,
+    latest_run_tag,
+)
 
 
 class EvaluationSummaryTest(unittest.TestCase):
@@ -17,7 +23,17 @@ class EvaluationSummaryTest(unittest.TestCase):
         (run_dir / "server_metadata.json").write_text(json.dumps({"model_id": model}), encoding="utf-8")
         with (run_dir / "episodes.jsonl").open("w", encoding="utf-8") as stream:
             for episode in range(recorded_episodes):
-                stream.write(json.dumps({"episode": episode}) + "\n")
+                stream.write(
+                    json.dumps(
+                        {
+                            "task": "task_a",
+                            "episode_index": episode,
+                            "seed": episode,
+                            "success": episode == 0,
+                        }
+                    )
+                    + "\n"
+                )
         (run_dir / "summary.json").write_text(
             json.dumps(
                 {
@@ -46,8 +62,10 @@ class EvaluationSummaryTest(unittest.TestCase):
 
         self.assertEqual(models, ["pi05", "vpp"])
         self.assertTrue(report["complete"])
+        self.assertEqual(report["paired_comparisons"][0]["paired_episodes"], 2)
+        self.assertEqual(report["paired_comparisons"][0]["success_rate_delta_a_minus_b"], 0.0)
         self.assertIn("2/2 models complete", output)
-        self.assertIn("1/2 (50.0%)", output)
+        self.assertIn("1/2 (50.0%; -)", output)
         self.assertIn("inference_ms", output)
 
     def test_incomplete_episode_file_is_reported(self):
@@ -83,6 +101,25 @@ class EvaluationSummaryTest(unittest.TestCase):
             os.utime(old, (1, 1))
             os.utime(new, (2, 2))
             self.assertEqual(latest_run_tag(Path(directory)), "new")
+
+    def test_standard_protocol_episode_count(self):
+        config = {
+            "tasks": ["a", "b"],
+            "policy_seeds": [0, 2],
+            "task_settings": {
+                "a": {"object_episode_ids": [0, 1, 2]},
+                "b": {"object_episode_ids": [0, 1]},
+            },
+        }
+        self.assertEqual(_expected_episode_count(config), 10)
+
+        with Path("configs/remote_eval/widowx_bridge.json").open(encoding="utf-8") as stream:
+            standard = json.load(stream)
+        self.assertEqual(_expected_episode_count(standard), 96)
+        self.assertEqual(standard["task_settings"]["widowx_spoon_on_towel"]["max_episode_steps"], 60)
+        self.assertEqual(
+            standard["task_settings"]["widowx_put_eggplant_in_basket"]["max_episode_steps"], 120
+        )
 
 
 if __name__ == "__main__":

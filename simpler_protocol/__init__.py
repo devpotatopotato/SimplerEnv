@@ -4,6 +4,8 @@ from .client import PolicyClient, PolicyClientError
 from .geometry import (
     absolute_pose_chunk_to_deltas,
     euler_xyz_to_rotvec,
+    quaternion_inverse_xyzw,
+    quaternion_multiply_xyzw,
     quaternion_xyzw_to_rotvec,
     rotvec_to_quaternion_xyzw,
 )
@@ -33,6 +35,8 @@ __all__ = [
     "encode_image",
     "euler_xyz_to_rotvec",
     "json_safe",
+    "quaternion_inverse_xyzw",
+    "quaternion_multiply_xyzw",
     "quaternion_xyzw_to_rotvec",
     "rotvec_to_quaternion_xyzw",
     "serve_backend",

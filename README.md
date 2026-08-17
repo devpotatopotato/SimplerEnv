@@ -103,7 +103,7 @@ pip install -e .
 ## Examples
 
 - Headless remote evaluation for π0.5, VPP, and Cosmos 3 Edge: see [the remote-policy evaluation guide](docs/REMOTE_POLICY_EVALUATION.md). It keeps each model in its own environment/process and uses one common Cartesian action contract.
-- Automated server setup, π0.5/VPP adaptation, and sequential two-GPU execution: `scripts/remote_eval/setup.sh`, `scripts/remote_eval/train.sh`, and `scripts/remote_eval/run.sh`.
+- Automated server setup, π0.5/VPP shared-data adaptation, native Cosmos3-Edge Bridge configuration, and standard 96-trial sequential two-GPU execution: `scripts/remote_eval/setup.sh`, `scripts/remote_eval/train.sh`, and `scripts/remote_eval/run.sh`.
 - Simple RT-1 and Octo evaluation script on prepackaged environments with visual matching evaluation setup: see [`simpler_env/simple_inference_visual_matching_prepackaged_envs.py`](https://github.com/simpler-env/SimplerEnv/blob/main/simpler_env/simple_inference_visual_matching_prepackaged_envs.py).
 - Colab notebook for RT-1 and Octo inference: see [this link](https://colab.research.google.com/github/simpler-env/SimplerEnv/blob/main/example.ipynb).
 - Environment interactive visualization and manual control: see [`ManiSkill2_real2sim/mani_skill2_real2sim/examples/demo_manual_control_custom_envs.py`](https://github.com/simpler-env/ManiSkill2_real2sim/blob/main/mani_skill2_real2sim/examples/demo_manual_control_custom_envs.py)

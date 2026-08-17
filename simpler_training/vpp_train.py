@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 from time import monotonic
 
 
@@ -91,10 +91,10 @@ def main() -> None:
         parser.error("step, batch, accumulation, and save values must be positive")
 
     sys.path.insert(0, str(args.vpp_root.resolve()))
-    from accelerate import Accelerator
     import hydra
-    from omegaconf import OmegaConf
     import torch
+    from accelerate import Accelerator
+    from omegaconf import OmegaConf
     from torch.utils.data import DataLoader
 
     from simpler_training.vpp_dataset import CanonicalLeRobotVPPDataset
@@ -280,6 +280,13 @@ def main() -> None:
             "video_model_path": str(args.video_model_path.resolve()),
             "text_encoder_path": str(args.text_encoder_path.resolve()),
             "train_steps": args.max_steps,
+            "effective_global_batch_size": (
+                args.batch_size * accelerator.num_processes * args.gradient_accumulation
+            ),
+            "declared_training_samples": (
+                args.max_steps * args.batch_size * accelerator.num_processes * args.gradient_accumulation
+            ),
+            "seed": args.seed,
             "adaptation_method": "frozen_video_backbone_action_head",
         }
         with open(output_dir / "artifacts.json", "w", encoding="utf-8") as stream:

@@ -5,8 +5,29 @@
     "widowx_stack_cube",
     "widowx_put_eggplant_in_basket"
   ],
-  "episodes_per_task": 10,
+  "protocol_name": "simpler_visual_matching_bridge_v1",
+  "episodes_per_task": 24,
   "base_seed": 0,
+  "environment_seed": 0,
+  "policy_seeds": [0],
+  "task_settings": {
+    "widowx_spoon_on_towel": {
+      "object_episode_ids": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+      "max_episode_steps": 60
+    },
+    "widowx_carrot_on_plate": {
+      "object_episode_ids": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+      "max_episode_steps": 60
+    },
+    "widowx_stack_cube": {
+      "object_episode_ids": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+      "max_episode_steps": 60
+    },
+    "widowx_put_eggplant_in_basket": {
+      "object_episode_ids": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+      "max_episode_steps": 120
+    }
+  },
   "max_episode_steps": 120,
   "request_horizon": 16,
   "execution_horizon": 1,

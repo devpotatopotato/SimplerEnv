@@ -1,12 +1,21 @@
+import io
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
+from unittest import mock
 
 import numpy as np
 
-from simpler_training.bridge_data import canonical_action, canonical_state, load_task_filters, matching_task
+from simpler_training.bridge_data import (
+    canonical_action,
+    canonical_state,
+    load_task_filters,
+    matching_task,
+)
 from simpler_training.models_env import update
+from simpler_training.training_manifest import main as write_training_manifest
 from simpler_training.vpp_train import _load_policy_state_dict, _policy_state_dict
 
 
@@ -94,6 +103,34 @@ class ModelsEnvironmentTest(unittest.TestCase):
         self.assertIn('PI05_CHECKPOINT="/new/\\$checkpoint"', text)
         self.assertIn('COSMOS_CHECKPOINT="keep"', text)
         self.assertIn('TRAINED_MODELS="pi05"', text)
+
+
+class TrainingManifestTest(unittest.TestCase):
+    def test_manifest_separates_local_and_native_regimes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dataset = root / "dataset.json"
+            artifact = root / "pi05.json"
+            output = root / "training.json"
+            dataset.write_text(json.dumps({"task_coverage": {"observed": ["spoon"]}}), encoding="utf-8")
+            artifact.write_text(json.dumps({"checkpoint": "/tmp/pi05"}), encoding="utf-8")
+            argv = [
+                "training_manifest",
+                "--dataset-manifest",
+                str(dataset),
+                "--output",
+                str(output),
+                "--artifact",
+                f"pi05={artifact}",
+                "--native",
+                "cosmos3=Cosmos3-Edge",
+            ]
+            with mock.patch("sys.argv", argv), redirect_stdout(io.StringIO()):
+                write_training_manifest()
+            manifest = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(manifest["comparability"]["shared_bridge_adaptation"], ["pi05"])
+        self.assertEqual(manifest["comparability"]["native_pretrained_bridge"], ["cosmos3"])
 
 
 class VPPCheckpointTest(unittest.TestCase):

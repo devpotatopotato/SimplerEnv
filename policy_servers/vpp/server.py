@@ -96,6 +96,7 @@ class VPPBackend(PolicyBackend):
                 else {"dataset": "calvin", "method": "none; output conversion only"}
             ),
             extra={
+                "comparison_group": args.comparison_group,
                 "video_model_path": args.video_model_path,
                 "image_size": args.image_size,
                 "action_adapter": self.action_adapter_kind,
@@ -172,6 +173,7 @@ def main():
     parser.add_argument("--policy-profile")
     parser.add_argument("--adaptation-dataset", default="bridge_widowx")
     parser.add_argument("--adaptation-method", default="frozen_video_backbone_action_head")
+    parser.add_argument("--comparison-group", default="shared_bridge_adaptation")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()

@@ -7,16 +7,15 @@ import os
 from typing import Any
 
 import numpy as np
+from openpi import transforms
 
 # OpenPI launches data-loader workers with the ``spawn`` multiprocessing
 # context. Transform classes must therefore be importable by module-qualified
 # name; defining them inside build_config() makes them unpicklable.
 from openpi.models import model as model_api
 from openpi.models import pi0_config
-import openpi.transforms as transforms
 from openpi.training import config as config_api
-from openpi.training import optimizer
-from openpi.training import weight_loaders
+from openpi.training import optimizer, weight_loaders
 
 CONFIG_NAME = "pi05_simpler_bridge_lora"
 DEFAULT_REPO_ID = "local/simpler_bridge_train"
@@ -103,6 +102,7 @@ def build_config(
     batch_size: int = 32,
     num_workers: int = 4,
     save_interval: int = 1_000,
+    seed: int = 42,
     resume: bool = False,
 ):
     model = pi0_config.Pi0Config(
@@ -137,6 +137,7 @@ def build_config(
         checkpoint_base_dir=checkpoint_base_dir,
         num_train_steps=train_steps,
         batch_size=batch_size,
+        seed=seed,
         num_workers=num_workers,
         save_interval=save_interval,
         keep_period=max(save_interval, 5_000),

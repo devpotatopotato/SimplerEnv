@@ -35,6 +35,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--save-interval", type=int, default=1_000)
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--norm-max-frames", type=int)
     args = parser.parse_args()
     if args.train_steps < 2 or args.batch_size < 1 or args.save_interval < 1:
@@ -50,7 +51,6 @@ def main() -> None:
     final_step = args.train_steps - 1
     final_checkpoint = checkpoint_dir / str(final_step)
 
-    existing_steps = _checkpoint_steps(checkpoint_dir)
     if final_checkpoint.is_dir():
         print(f"π0.5 training already complete: {final_checkpoint}")
     else:
@@ -72,6 +72,7 @@ def main() -> None:
             # is rebuilt below with the requested worker count.
             num_workers=0,
             save_interval=args.save_interval,
+            seed=args.seed,
             resume=resume,
         )
         register_config(config)
@@ -93,6 +94,7 @@ def main() -> None:
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             save_interval=args.save_interval,
+            seed=args.seed,
             resume=resume,
         )
         register_config(config)
@@ -109,6 +111,9 @@ def main() -> None:
         "checkpoint": str(final_checkpoint),
         "repo_id": args.repo_id,
         "train_steps": args.train_steps,
+        "global_batch_size": args.batch_size,
+        "declared_training_samples": args.train_steps * args.batch_size,
+        "seed": args.seed,
         "adaptation_method": "lora",
     }
     output_root.mkdir(parents=True, exist_ok=True)

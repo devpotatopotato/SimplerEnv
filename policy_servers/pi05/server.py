@@ -76,7 +76,11 @@ class Pi05Backend(PolicyBackend):
                 if args.output_mode == "canonical"
                 else {"dataset": "libero", "method": "none; output conversion only"}
             ),
-            extra={"openpi_config": args.config_name, "upstream_revision": git_revision(openpi_config.__file__)},
+            extra={
+                "comparison_group": args.comparison_group,
+                "openpi_config": args.config_name,
+                "upstream_revision": git_revision(openpi_config.__file__),
+            },
         )
 
     @property
@@ -164,6 +168,7 @@ def main():
     parser.add_argument("--policy-profile")
     parser.add_argument("--adaptation-dataset", default="bridge_widowx")
     parser.add_argument("--adaptation-method", default="action_head_or_adapter")
+    parser.add_argument("--comparison-group", default="shared_bridge_adaptation")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()

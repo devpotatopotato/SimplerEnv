@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepare common Bridge data and adapt π0.5 and VPP for SimplerEnv.
+# Prepare common Bridge data and declare all three SimplerEnv policy regimes.
 
 set -Eeuo pipefail
 
@@ -14,12 +14,14 @@ MODEL_HOME="${MODEL_HOME:-${REMOTE_EVAL_HOME}/models}"
 
 OPENPI_ROOT="${SOURCE_ROOT}/openpi"
 VPP_ROOT="${SOURCE_ROOT}/video-prediction-policy"
+COSMOS_ROOT="${SOURCE_ROOT}/cosmos-framework"
 OPENPI_PYTHON="${OPENPI_ROOT}/.venv/bin/python"
 VPP_PYTHON="${ENV_ROOT}/vpp/bin/python"
 MODELS_ENV="${SCRIPT_DIR}/models.env"
 
-SELECTED_MODELS="pi05,vpp"
+SELECTED_MODELS="pi05,vpp,cosmos3"
 TRAIN_GPUS="${TRAIN_GPUS:-0,1}"
+TRAIN_SEED="${TRAIN_SEED:-42}"
 BRIDGE_SOURCE="${BRIDGE_SOURCE:-gs://gresearch/robotics/bridge/0.1.0}"
 BRIDGE_TASK_FILTER="${BRIDGE_TASK_FILTER:-${REPO_ROOT}/configs/remote_training/bridge_tasks.json}"
 BRIDGE_VALIDATION_FRACTION="${BRIDGE_VALIDATION_FRACTION:-0.1}"
@@ -47,11 +49,12 @@ usage() {
     cat <<'EOF'
 Usage: train.sh [options]
 
-Builds one common Bridge/WidowX dataset, adapts π0.5 and VPP, updates
-models.env, and validates the resulting run.sh commands.
+Builds one common Bridge/WidowX dataset, adapts π0.5 and VPP, configures the
+released Cosmos3-Edge native Bridge domain, writes an auditable manifest,
+updates models.env, and validates run.sh.
 
 Options:
-  --models LIST  Comma-separated pi05,vpp (default: pi05,vpp)
+  --models LIST  Comma-separated pi05,vpp,cosmos3 (default: all three)
   --data-only    Convert/validate the common dataset, then stop
   --dry-run      Print commands without downloads, conversion, or training
   -h, --help     Show this help
@@ -65,6 +68,7 @@ Useful environment overrides:
   PI05_TRAIN_STEPS=30000      PI05_BATCH_SIZE=32
   VPP_TRAIN_STEPS=50000       VPP_BATCH_SIZE=2
   VPP_GRADIENT_ACCUMULATION=4 TRAIN_NUM_WORKERS=4
+  TRAIN_SEED=42
 
 Interrupted model training resumes from last.pt/Orbax checkpoints. A complete
 dataset is reused. An incomplete dataset conversion is rejected rather than
@@ -126,8 +130,8 @@ wants_model() {
 
 for model in ${SELECTED_MODELS//,/ }; do
     case "$model" in
-        pi05|vpp) ;;
-        *) die "train.sh supports pi05 and vpp, not: $model" ;;
+        pi05|vpp|cosmos3) ;;
+        *) die "unknown model: $model" ;;
     esac
 done
 [[ -n "$SELECTED_MODELS" ]] || die "no models selected"
@@ -136,6 +140,10 @@ command -v uv >/dev/null || die "uv is required; run setup.sh first"
 [[ -d "$OPENPI_ROOT" && -x "$OPENPI_PYTHON" ]] || die "OpenPI is missing; run setup.sh --models pi05"
 if ((DATA_ONLY == 0)) && wants_model vpp; then
     [[ -d "$VPP_ROOT" && -x "$VPP_PYTHON" ]] || die "VPP is missing; run setup.sh --models vpp"
+fi
+if ((DATA_ONLY == 0)) && wants_model cosmos3; then
+    [[ -d "$COSMOS_ROOT" && -x "${COSMOS_ROOT}/.venv/bin/python" ]] || \
+        die "Cosmos is missing; run setup.sh --models cosmos3"
 fi
 [[ -f "$BRIDGE_TASK_FILTER" ]] || die "missing Bridge task filter: $BRIDGE_TASK_FILTER"
 
@@ -224,6 +232,7 @@ if wants_model pi05; then
         --batch-size "$PI05_BATCH_SIZE"
         --num-workers "$TRAIN_NUM_WORKERS"
         --save-interval "$PI05_SAVE_INTERVAL"
+        --seed "$TRAIN_SEED"
     )
     if ((PI05_NORM_MAX_FRAMES > 0)); then
         PI05_COMMAND+=(--norm-max-frames "$PI05_NORM_MAX_FRAMES")
@@ -263,8 +272,16 @@ if wants_model vpp; then
         --save-interval "$VPP_SAVE_INTERVAL"
         --max-val-batches "$VPP_MAX_VAL_BATCHES"
         --sample-stride "$VPP_SAMPLE_STRIDE"
+        --seed "$TRAIN_SEED"
     )
     run_command "${VPP_LAUNCH[@]}"
+fi
+
+if wants_model cosmos3; then
+    note "using Cosmos3-Edge's released native bridge_orig_lerobot action domain"
+    printf '%s\n' \
+        "Cosmos is not locally post-trained: the official Edge recipe is not a validated two-GPU recipe." \
+        "Its results will be labeled native_pretrained_bridge, separately from π0.5/VPP shared adaptation."
 fi
 
 if ((DRY_RUN == 1)); then
@@ -272,14 +289,22 @@ if ((DRY_RUN == 1)); then
     exit 0
 fi
 
-UPDATE_ARGS=("TRAINED_MODELS=${SELECTED_MODELS}")
+TRAINING_MANIFEST="${TRAINING_HOME}/training_manifest.json"
+MANIFEST_ARGS=(
+    --dataset-manifest "$DATA_MANIFEST"
+    --output "$TRAINING_MANIFEST"
+    --seed "$TRAIN_SEED"
+)
+UPDATE_ARGS=("TRAINED_MODELS=${SELECTED_MODELS}" "TRAINING_MANIFEST=${TRAINING_MANIFEST}")
 if wants_model pi05; then
     [[ -d "$PI05_FINAL" ]] || die "missing final π0.5 checkpoint: $PI05_FINAL"
     UPDATE_ARGS+=(
         "PI05_CONFIG_NAME=pi05_simpler_bridge_lora"
         "PI05_CHECKPOINT=${PI05_FINAL}"
         "PI05_ADAPTATION_METHOD=lora"
+        "PI05_COMPARISON_GROUP=shared_bridge_adaptation"
     )
+    MANIFEST_ARGS+=(--artifact "pi05=${PI05_OUTPUT}/artifacts.json")
 fi
 if wants_model vpp; then
     [[ -f "${VPP_OUTPUT}/final.pt" && -f "${VPP_OUTPUT}/config.yaml" ]] || \
@@ -290,10 +315,23 @@ if wants_model vpp; then
         "VPP_TEXT_ENCODER_PATH=${VPP_TEXT_ENCODER}"
         "VPP_ACTION_CHECKPOINT=${VPP_OUTPUT}/final.pt"
         "VPP_ADAPTATION_METHOD=frozen_video_backbone_action_head"
+        "VPP_COMPARISON_GROUP=shared_bridge_adaptation"
     )
+    MANIFEST_ARGS+=(--artifact "vpp=${VPP_OUTPUT}/artifacts.json")
+fi
+if wants_model cosmos3; then
+    UPDATE_ARGS+=(
+        "COSMOS_CHECKPOINT=Cosmos3-Edge"
+        "COSMOS_DOMAIN_NAME=bridge_orig_lerobot"
+        "COSMOS_ADAPTATION_DATASET=upstream_bridge_original"
+        "COSMOS_ADAPTATION_METHOD=native_bridge_action_head"
+        "COSMOS_COMPARISON_GROUP=native_pretrained_bridge"
+    )
+    MANIFEST_ARGS+=(--native "cosmos3=Cosmos3-Edge")
 fi
 
 [[ -f "$MODELS_ENV" ]] || cp "${SCRIPT_DIR}/models.env.example" "$MODELS_ENV"
+run_command "$OPENPI_PYTHON" -m simpler_training.training_manifest "${MANIFEST_ARGS[@]}"
 run_command "$OPENPI_PYTHON" -m simpler_training.models_env "$MODELS_ENV" "${UPDATE_ARGS[@]}"
 
 note "validating the evaluation launcher against the produced artifacts"
