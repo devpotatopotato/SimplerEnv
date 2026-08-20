@@ -144,25 +144,31 @@ The released Octo 1.0 environment pins JAX 0.4.20, which predates NVIDIA Blackwe
 uv venv --python 3.10 .venv-octo
 
 uv pip install --python .venv-octo/bin/python -e ./ManiSkill2_real2sim
-uv pip install --python .venv-octo/bin/python tensorflow==2.15.0
-uv pip install --python .venv-octo/bin/python -r requirements_full_install.txt
-uv pip install --python .venv-octo/bin/python tensorflow==2.15.1
-
 uv pip install --python .venv-octo/bin/python \
+  'tensorflow==2.19.1' \
+  'tf-keras==2.19.0' \
+  'tensorflow-probability==0.25.0' \
   'jax[cuda12]==0.6.0' \
   'flax==0.10.6' \
   'optax==0.2.5' \
   'chex==0.1.89' \
   'distrax==0.1.5' \
-  'tensorflow-probability==0.23.0' \
   'numpy==1.26.4' \
-  'ml-dtypes==0.5.4' \
-  'transformers>=4.34.1,<5'
+  'scipy==1.12.0' \
+  'transformers>=4.34.1,<5' \
+  'huggingface-hub>=0.20' \
+  'einops>=0.6.1' \
+  'matplotlib' \
+  'mediapy==1.2.0' \
+  'pillow' \
+  'requests' \
+  'transforms3d' \
+  'setuptools<81'
 
 uv pip install --python .venv-octo/bin/python --no-deps -e ./octo
 ```
 
-The final install intentionally replaces TensorFlow 2.15's `ml-dtypes` pin in the Octo-only environment. TensorFlow is used there for preprocessing, while JAX performs policy inference on the GPU. The released Octo code's removed JAX tree APIs are supplied by a compatibility shim in `simpler_env/policies/octo/octo_model.py`.
+TensorFlow is used in this environment for CPU preprocessing, while JAX performs policy inference on the GPU. The evaluator hides the GPU from TensorFlow for Octo jobs so both frameworks do not compete for CUDA memory. The released Octo code's removed JAX tree APIs are supplied by a compatibility shim in `simpler_env/policies/octo/octo_model.py`.
 
 Verify that JAX performs a compiled operation on the selected physical GPU:
 

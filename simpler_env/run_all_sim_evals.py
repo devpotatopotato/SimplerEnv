@@ -157,6 +157,8 @@ def run_script(
     child_env = os.environ.copy()
     child_env["SIMPLER_GPU_ID"] = str(gpu)
     child_env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    if script.model == "octo":
+        child_env.setdefault("SIMPLER_DISABLE_TF_GPU", "1")
     child_env["PATH"] = str(python.parent) + os.pathsep + child_env.get("PATH", "")
     child_env["PYTHONPATH"] = str(repo_root) + os.pathsep + child_env.get("PYTHONPATH", "")
     command = ["bash", script.path]

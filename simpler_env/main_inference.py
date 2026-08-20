@@ -5,14 +5,6 @@ import tensorflow as tf
 
 from simpler_env.evaluation.argparse import get_args
 from simpler_env.evaluation.maniskill2_evaluator import maniskill2_evaluator
-from simpler_env.policies.octo.octo_server_model import OctoServerInference
-from simpler_env.policies.rt1.rt1_model import RT1Inference
-
-try:
-    from simpler_env.policies.octo.octo_model import OctoInference
-except ImportError as e:
-    print("Octo is not correctly imported.")
-    print(e)
 
 
 if __name__ == "__main__":
@@ -21,6 +13,8 @@ if __name__ == "__main__":
     os.environ["DISPLAY"] = ""
     # prevent a single jax process from taking up all the GPU memory
     os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+    if os.environ.get("SIMPLER_DISABLE_TF_GPU") == "1":
+        tf.config.set_visible_devices([], "GPU")
     gpus = tf.config.list_physical_devices("GPU")
     if len(gpus) > 0:
         # prevent a single tf process from taking up all the GPU memory
@@ -31,6 +25,8 @@ if __name__ == "__main__":
 
     # policy model creation; update this if you are using a new policy model
     if args.policy_model == "rt1":
+        from simpler_env.policies.rt1.rt1_model import RT1Inference
+
         assert args.ckpt_path is not None
         model = RT1Inference(
             saved_model_path=args.ckpt_path,
@@ -41,12 +37,16 @@ if __name__ == "__main__":
         if args.ckpt_path is None or args.ckpt_path == "None":
             args.ckpt_path = args.policy_model
         if "server" in args.policy_model:
+            from simpler_env.policies.octo.octo_server_model import OctoServerInference
+
             model = OctoServerInference(
                 model_type=args.ckpt_path,
                 policy_setup=args.policy_setup,
                 action_scale=args.action_scale,
             )
         else:
+            from simpler_env.policies.octo.octo_model import OctoInference
+
             model = OctoInference(
                 model_type=args.ckpt_path,
                 policy_setup=args.policy_setup,
