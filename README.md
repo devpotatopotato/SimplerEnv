@@ -136,6 +136,65 @@ To run two simulation scripts concurrently, pinned to GPUs 0 and 1:
 uv run simpler-env-eval-all --gpus 0 1
 ```
 
+### Blackwell Octo GPU Setup with uv
+
+The released Octo 1.0 environment pins JAX 0.4.20, which predates NVIDIA Blackwell support. Keep the RT-1 runtime in `.venv` and create a second environment for Octo so that TensorFlow's CUDA dependencies do not conflict with the newer JAX runtime:
+
+```bash
+uv venv --python 3.10 .venv-octo
+
+uv pip install --python .venv-octo/bin/python -e ./ManiSkill2_real2sim
+uv pip install --python .venv-octo/bin/python tensorflow==2.15.0
+uv pip install --python .venv-octo/bin/python -r requirements_full_install.txt
+uv pip install --python .venv-octo/bin/python tensorflow==2.15.1
+
+uv pip install --python .venv-octo/bin/python \
+  'jax[cuda12]==0.6.0' \
+  'flax==0.10.6' \
+  'optax==0.2.5' \
+  'chex==0.1.89' \
+  'distrax==0.1.5' \
+  'tensorflow-probability==0.23.0' \
+  'numpy==1.26.4' \
+  'ml-dtypes==0.5.4' \
+  'transformers>=4.34.1,<5'
+
+uv pip install --python .venv-octo/bin/python --no-deps -e ./octo
+```
+
+The final install intentionally replaces TensorFlow 2.15's `ml-dtypes` pin in the Octo-only environment. TensorFlow is used there for preprocessing, while JAX performs policy inference on the GPU. The released Octo code's removed JAX tree APIs are supplied by a compatibility shim in `simpler_env/policies/octo/octo_model.py`.
+
+Verify that JAX performs a compiled operation on the selected physical GPU:
+
+```bash
+CUDA_VISIBLE_DEVICES=4 \
+XLA_PYTHON_CLIENT_PREALLOCATE=false \
+.venv-octo/bin/python - <<'PY'
+import jax
+import jax.numpy as jnp
+
+result = (jnp.ones((16, 16)) @ jnp.ones((16, 16))).block_until_ready()
+print("JAX:", jax.__version__)
+print("Devices:", jax.devices())
+print("Result device:", result.device)
+PY
+```
+
+Run RT-1 and Octo from their respective environments in the same two-GPU scheduler:
+
+```bash
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json \
+DISPLAY= \
+XLA_PYTHON_CLIENT_PREALLOCATE=false \
+.venv/bin/simpler-env-eval-all \
+  --gpus 3 4 \
+  --rt1-python .venv/bin/python \
+  --octo-python .venv-octo/bin/python \
+  --continue-on-error
+```
+
+Do not set `JAX_PLATFORMS=cpu` when using this configuration.
+
 
 ## Examples
 

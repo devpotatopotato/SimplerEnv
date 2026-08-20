@@ -4,6 +4,7 @@ _ext
 *.pyc
 *.so
 .venv/
+.venv-octo/
 build/
 dist/
 *.egg-info/

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-import importlib.util
 import os
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 from typing import NamedTuple
 
 
@@ -67,6 +67,14 @@ def parse_args() -> argparse.Namespace:
     gpu_group = parser.add_mutually_exclusive_group()
     gpu_group.add_argument("--gpu", type=int, help="Use one CUDA device")
     gpu_group.add_argument("--gpus", type=int, nargs="+", help="Run one evaluation script per CUDA device")
+    parser.add_argument(
+        "--rt1-python",
+        help="Python executable used by RT-1 scripts (default: the runner's Python)",
+    )
+    parser.add_argument(
+        "--octo-python",
+        help="Python executable used by Octo scripts (default: the runner's Python)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print scripts without running them")
     parser.add_argument("--continue-on-error", action="store_true")
     parser.add_argument("--skip-preflight", action="store_true")
@@ -89,12 +97,47 @@ def select_scripts(args: argparse.Namespace) -> list[EvalScript]:
     ]
 
 
-def preflight(repo_root: Path, models: set[str]) -> list[str]:
+def resolve_model_pythons(repo_root: Path, args: argparse.Namespace) -> dict[str, Path]:
+    model_pythons = {}
+    for model in ("rt1", "octo"):
+        configured = getattr(args, f"{model}_python")
+        python = Path(configured).expanduser() if configured else Path(sys.executable)
+        if not python.is_absolute():
+            python = repo_root / python
+        model_pythons[model] = python.absolute()
+    return model_pythons
+
+
+def find_missing_modules(python: Path, modules: tuple[str, ...]) -> list[str]:
+    check_code = (
+        "import importlib.util, sys; "
+        "print('\\n'.join(name for name in sys.argv[1:] if importlib.util.find_spec(name) is None))"
+    )
+    result = subprocess.run(
+        [str(python), "-c", check_code, *modules],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode:
+        detail = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
+        raise RuntimeError(detail)
+    return [line for line in result.stdout.splitlines() if line]
+
+
+def preflight(repo_root: Path, models: set[str], model_pythons: dict[str, Path]) -> list[str]:
     errors = []
     for model in sorted(models):
-        missing = [module for module in MODEL_MODULES[model] if importlib.util.find_spec(module) is None]
+        python = model_pythons[model]
+        if not python.is_file() or not os.access(python, os.X_OK):
+            errors.append(f"{model}: Python executable not found or not executable: {python}")
+            continue
+        try:
+            missing = find_missing_modules(python, MODEL_MODULES[model])
+        except RuntimeError as error:
+            errors.append(f"{model}: could not inspect {python}: {error}")
+            continue
         if missing:
-            errors.append(f"{model}: missing Python modules: {', '.join(missing)}")
+            errors.append(f"{model}: missing Python modules in {python}: {', '.join(missing)}")
 
     if "rt1" in models:
         missing_checkpoints = [path for path in RT1_CHECKPOINTS if not (repo_root / path).is_dir()]
@@ -109,12 +152,15 @@ def run_script(
     index: int,
     total: int,
     gpu: int,
+    python: Path,
 ) -> tuple[int, EvalScript, int]:
     child_env = os.environ.copy()
     child_env["SIMPLER_GPU_ID"] = str(gpu)
     child_env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    child_env["PATH"] = str(python.parent) + os.pathsep + child_env.get("PATH", "")
+    child_env["PYTHONPATH"] = str(repo_root) + os.pathsep + child_env.get("PYTHONPATH", "")
     command = ["bash", script.path]
-    print(f"\n[{index}/{total}][GPU {gpu}] {shlex.join(command)}", flush=True)
+    print(f"\n[{index}/{total}][GPU {gpu}][Python {python}] {shlex.join(command)}", flush=True)
     result = subprocess.run(command, cwd=repo_root, env=child_env)
     return index, script, result.returncode
 
@@ -122,6 +168,7 @@ def run_script(
 def main() -> int:
     args = parse_args()
     repo_root = Path(__file__).resolve().parents[1]
+    model_pythons = resolve_model_pythons(repo_root, args)
     scripts = select_scripts(args)
 
     if not scripts:
@@ -133,16 +180,18 @@ def main() -> int:
         print(f"  {script.model:4} {script.suite:6} {script.setup:19} {script.path}")
 
     print(f"GPU workers: {', '.join(map(str, args.gpus))}")
+    for model in sorted({script.model for script in scripts}):
+        print(f"{model.upper()} Python: {model_pythons[model]}")
 
     if args.dry_run:
         print("\nInitial GPU assignment:")
         for index, script in enumerate(scripts[: len(args.gpus)], start=1):
             gpu = args.gpus[index - 1]
-            print(f"  [GPU {gpu}] bash {script.path}")
+            print(f"  [GPU {gpu}][Python {model_pythons[script.model]}] bash {script.path}")
         return 0
 
     if not args.skip_preflight:
-        errors = preflight(repo_root, {script.model for script in scripts})
+        errors = preflight(repo_root, {script.model for script in scripts}, model_pythons)
         if errors:
             print("\nPreflight failed:")
             for error in errors:
@@ -167,6 +216,7 @@ def main() -> int:
                 script_index + 1,
                 len(scripts),
                 gpu,
+                model_pythons[scripts[script_index].model],
             )
             running[future] = gpu
             next_script_index += 1
@@ -190,6 +240,7 @@ def main() -> int:
                         script_index + 1,
                         len(scripts),
                         gpu,
+                        model_pythons[scripts[script_index].model],
                     )
                     running[next_future] = gpu
                     next_script_index += 1

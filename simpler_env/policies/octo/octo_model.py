@@ -5,6 +5,30 @@ import os
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
+
+
+def _install_legacy_jax_aliases() -> None:
+    """Provide the JAX APIs used by the released Octo 1.0 checkpoint code."""
+
+    tree_aliases = (
+        "tree_map",
+        "tree_leaves",
+        "tree_flatten",
+        "tree_structure",
+        "tree_unflatten",
+        "tree_transpose",
+        "treedef_is_leaf",
+    )
+    for name in tree_aliases:
+        if not hasattr(jax, name) and hasattr(jax.tree_util, name):
+            setattr(jax, name, getattr(jax.tree_util, name))
+
+    if not hasattr(jax.random, "KeyArray"):
+        jax.random.KeyArray = jax.Array
+
+
+_install_legacy_jax_aliases()
+
 from octo.model.octo_model import OctoModel
 import tensorflow as tf
 from transformers import AutoTokenizer
