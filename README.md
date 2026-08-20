@@ -201,6 +201,23 @@ XLA_PYTHON_CLIENT_PREALLOCATE=false \
 
 Do not set `JAX_PLATFORMS=cpu` when using this configuration.
 
+To evaluate every supported task using only the final released policy choices, add `--final-checkpoints-only`:
+
+```bash
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json \
+DISPLAY= \
+XLA_PYTHON_CLIENT_PREALLOCATE=false \
+.venv/bin/simpler-env-eval-all \
+  --models rt1 octo \
+  --gpus 3 4 \
+  --rt1-python .venv/bin/python \
+  --octo-python .venv-octo/bin/python \
+  --final-checkpoints-only \
+  --continue-on-error
+```
+
+This selects RT-1-Converged (`rt_1_tf_trained_for_000400120`) for Google Robot, RT-1-X for Bridge, and Octo Base. It retains all task, visual-matching, variant-aggregation, environment-variation, and stochastic-seed evaluations.
+
 
 ## Examples
 

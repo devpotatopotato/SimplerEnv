@@ -46,6 +46,8 @@ RT1_CHECKPOINTS = (
     "checkpoints/rt_1_x_tf_trained_for_002272480_step",
     "checkpoints/rt_1_tf_trained_for_000001120",
 )
+RT1_CONVERGED_CHECKPOINT = "checkpoints/rt_1_tf_trained_for_000400120"
+RT1_X_CHECKPOINT = "checkpoints/rt_1_x_tf_trained_for_002272480_step"
 
 MODEL_MODULES = {
     "rt1": ("tensorflow", "tensorflow_hub", "tf_agents"),
@@ -74,6 +76,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--octo-python",
         help="Python executable used by Octo scripts (default: the runner's Python)",
+    )
+    parser.add_argument(
+        "--final-checkpoints-only",
+        action="store_true",
+        help="Evaluate RT-1-Converged/RT-1-X and Octo Base without checkpoint sweeps",
     )
     parser.add_argument("--dry-run", action="store_true", help="Print scripts without running them")
     parser.add_argument("--continue-on-error", action="store_true")
@@ -124,8 +131,14 @@ def find_missing_modules(python: Path, modules: tuple[str, ...]) -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
-def preflight(repo_root: Path, models: set[str], model_pythons: dict[str, Path]) -> list[str]:
+def preflight(
+    repo_root: Path,
+    scripts: list[EvalScript],
+    model_pythons: dict[str, Path],
+    final_checkpoints_only: bool,
+) -> list[str]:
     errors = []
+    models = {script.model for script in scripts}
     for model in sorted(models):
         python = model_pythons[model]
         if not python.is_file() or not os.access(python, os.X_OK):
@@ -140,7 +153,17 @@ def preflight(repo_root: Path, models: set[str], model_pythons: dict[str, Path])
             errors.append(f"{model}: missing Python modules in {python}: {', '.join(missing)}")
 
     if "rt1" in models:
-        missing_checkpoints = [path for path in RT1_CHECKPOINTS if not (repo_root / path).is_dir()]
+        required_checkpoints = RT1_CHECKPOINTS
+        if final_checkpoints_only:
+            required_checkpoints = tuple(
+                path
+                for suite, path in (
+                    ("google", RT1_CONVERGED_CHECKPOINT),
+                    ("bridge", RT1_X_CHECKPOINT),
+                )
+                if any(script.model == "rt1" and script.suite == suite for script in scripts)
+            )
+        missing_checkpoints = [path for path in required_checkpoints if not (repo_root / path).is_dir()]
         if missing_checkpoints:
             errors.append("rt1: missing checkpoints: " + ", ".join(missing_checkpoints))
     return errors
@@ -153,12 +176,15 @@ def run_script(
     total: int,
     gpu: int,
     python: Path,
+    final_checkpoints_only: bool,
 ) -> tuple[int, EvalScript, int]:
     child_env = os.environ.copy()
     child_env["SIMPLER_GPU_ID"] = str(gpu)
     child_env["CUDA_VISIBLE_DEVICES"] = str(gpu)
     if script.model == "octo":
         child_env.setdefault("SIMPLER_DISABLE_TF_GPU", "1")
+    if final_checkpoints_only:
+        child_env["SIMPLER_FINAL_CHECKPOINT_ONLY"] = "1"
     child_env["PATH"] = str(python.parent) + os.pathsep + child_env.get("PATH", "")
     child_env["PYTHONPATH"] = str(repo_root) + os.pathsep + child_env.get("PYTHONPATH", "")
     command = ["bash", script.path]
@@ -182,6 +208,8 @@ def main() -> int:
         print(f"  {script.model:4} {script.suite:6} {script.setup:19} {script.path}")
 
     print(f"GPU workers: {', '.join(map(str, args.gpus))}")
+    if args.final_checkpoints_only:
+        print("Checkpoint selection: RT-1-Converged/RT-1-X and Octo Base only")
     for model in sorted({script.model for script in scripts}):
         print(f"{model.upper()} Python: {model_pythons[model]}")
 
@@ -193,7 +221,7 @@ def main() -> int:
         return 0
 
     if not args.skip_preflight:
-        errors = preflight(repo_root, {script.model for script in scripts}, model_pythons)
+        errors = preflight(repo_root, scripts, model_pythons, args.final_checkpoints_only)
         if errors:
             print("\nPreflight failed:")
             for error in errors:
@@ -219,6 +247,7 @@ def main() -> int:
                 len(scripts),
                 gpu,
                 model_pythons[scripts[script_index].model],
+                args.final_checkpoints_only,
             )
             running[future] = gpu
             next_script_index += 1
@@ -243,6 +272,7 @@ def main() -> int:
                         len(scripts),
                         gpu,
                         model_pythons[scripts[script_index].model],
+                        args.final_checkpoints_only,
                     )
                     running[next_future] = gpu
                     next_script_index += 1

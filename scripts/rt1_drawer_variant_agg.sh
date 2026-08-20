@@ -9,6 +9,10 @@ declare -a ckpt_paths=(
 "./checkpoints/rt_1_tf_trained_for_000001120/"
 )
 
+if [[ "${SIMPLER_FINAL_CHECKPOINT_ONLY:-0}" == "1" ]]; then
+  ckpt_paths=("./checkpoints/rt_1_tf_trained_for_000400120/")
+fi
+
 declare -a env_names=(
 OpenTopDrawerCustomInScene-v0
 OpenMiddleDrawerCustomInScene-v0

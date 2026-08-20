@@ -7,6 +7,10 @@ declare -a policy_models=(
 # "octo-server"
 )
 
+if [[ "${SIMPLER_FINAL_CHECKPOINT_ONLY:-0}" == "1" ]]; then
+  policy_models=("octo-base")
+fi
+
 ckpt_path=None
 
 scene_name=bridge_table_1_v1

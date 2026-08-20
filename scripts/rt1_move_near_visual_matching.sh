@@ -6,6 +6,10 @@ declare -a arr=("./checkpoints/rt_1_tf_trained_for_000400120/" \
                 "./checkpoints/rt_1_tf_trained_for_000058240/" \
                 "./checkpoints/rt_1_tf_trained_for_000001120/")
 
+if [[ "${SIMPLER_FINAL_CHECKPOINT_ONLY:-0}" == "1" ]]; then
+  arr=("./checkpoints/rt_1_tf_trained_for_000400120/")
+fi
+
 env_name=MoveNearGoogleBakedTexInScene-v0
 # env_name=MoveNearGoogleBakedTexInScene-v1
 scene_name=google_pick_coke_can_1_v4

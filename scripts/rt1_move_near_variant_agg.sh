@@ -6,6 +6,10 @@ declare -a arr=("./checkpoints/rt_1_x_tf_trained_for_002272480_step/" \
                 "./checkpoints/rt_1_tf_trained_for_000058240/" \
                 "./checkpoints/rt_1_tf_trained_for_000001120/")
 
+if [[ "${SIMPLER_FINAL_CHECKPOINT_ONLY:-0}" == "1" ]]; then
+  arr=("./checkpoints/rt_1_tf_trained_for_000400120/")
+fi
+
 for ckpt_path in "${arr[@]}"; do echo "$ckpt_path"; done
 
 
