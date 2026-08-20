@@ -1,3 +1,31 @@
+[build-system]
+requires = ["setuptools>=62.3.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simpler-env"
+version = "0.0.1"
+description = "Simulated manipulation policy evaluation environments for real robot setups"
+readme = "README.md"
+requires-python = ">=3.10,<3.12"
+dependencies = [
+    "mani-skill2-real2sim",
+    "matplotlib",
+    "mediapy==1.2.0",
+    "numpy==1.24.4",
+    "pillow",
+    "setuptools<81",
+]
+
+[project.scripts]
+simpler-env-eval-all = "simpler_env.run_all_sim_evals:main"
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+mani-skill2-real2sim = { path = "ManiSkill2_real2sim", editable = true }
+
 [tool.black]
 # https://github.com/psf/black
 line-length = 120

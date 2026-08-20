@@ -1,5 +1,5 @@
 
-gpu_id=0
+gpu_id=${SIMPLER_GPU_ID:-0}
 
 declare -a arr=("octo-base")
 

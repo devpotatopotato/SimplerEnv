@@ -1,6 +1,6 @@
 
 
-gpu_id=0
+gpu_id=${SIMPLER_GPU_ID:-0}
 policy_model=rt1
 ckpt_path=checkpoints/rt_1_x_tf_trained_for_002272480_step/
 
@@ -49,5 +49,4 @@ CUDA_VISIBLE_DEVICES=${gpu_id} python simpler_env/main_inference.py --policy-mod
   --rgb-overlay-path ${rgb_overlay_path} \
   --robot-init-x ${robot_init_x} ${robot_init_x} 1 --robot-init-y ${robot_init_y} ${robot_init_y} 1 --obj-variation-mode episode --obj-episode-range 0 24 \
   --robot-init-rot-quat-center 0 0 0 1 --robot-init-rot-rpy-range 0 0 1 0 0 1 0 0 1;
-
 

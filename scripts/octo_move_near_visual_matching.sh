@@ -1,6 +1,6 @@
 
 
-gpu_id=0
+gpu_id=${SIMPLER_GPU_ID:-0}
 
 declare -a policy_models=(
   "octo-base"

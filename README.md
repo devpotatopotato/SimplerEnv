@@ -99,6 +99,43 @@ pip install -e .
 
 **If you'd like to perform evaluations on our provided agents (e.g., RT-1, Octo), or add new robots and environments, please additionally follow the full installation instructions [here](#full-installation-rt-1-and-octo-inference-env-building).**
 
+### uv Setup for Simulation-Only Evaluation
+
+The root project is configured to use Python 3.10 and a repository-local `.venv`. Initialize the environment with:
+
+```bash
+git submodule update --init --recursive
+uv sync
+```
+
+Run commands without activating the environment:
+
+```bash
+uv run python -c "import simpler_env; print(simpler_env.ENVIRONMENTS)"
+```
+
+Or activate it for the current shell:
+
+```bash
+source .venv/bin/activate
+```
+
+The base `uv sync` installs the simulator, environment assets, and rollout visualization dependencies only. It does not install TensorFlow, JAX, RT-1, or Octo. Those runtimes are still required when the policy being evaluated is RT-1 or Octo, even though the rollout itself occurs entirely in simulation.
+
+After installing both policy runtimes and the four RT-1 checkpoints, run the full published simulation matrix with one command:
+
+```bash
+uv run simpler-env-eval-all
+```
+
+This sequentially runs all RT-1-family and Octo scripts for the Google Robot and Bridge suites under both available evaluation setups. Inspect the commands without launching the long-running evaluations with `uv run simpler-env-eval-all --dry-run`.
+
+To run two simulation scripts concurrently, pinned to GPUs 0 and 1:
+
+```bash
+uv run simpler-env-eval-all --gpus 0 1
+```
+
 
 ## Examples
 
